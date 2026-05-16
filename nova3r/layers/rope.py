@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Weirong Chen
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 # All rights reserved.
 #
@@ -174,31 +175,17 @@ class RotaryPositionEmbedding2D(nn.Module):
         assert tokens.size(-1) % 2 == 0, "Feature dimension must be even"
         assert positions.ndim == 3 and positions.shape[-1] == 2, "Positions must have shape (batch_size, n_tokens, 2)"
         
-        # Check for NaN or invalid values in positions
         if torch.isnan(positions).any():
-            print(f"Warning: NaN values detected in positions tensor. Shape: {positions.shape}")
-            print(f"NaN count: {torch.isnan(positions).sum()}")
-            # Replace NaN with zeros as fallback
             positions = torch.nan_to_num(positions, nan=0.0)
-        
         if torch.isinf(positions).any():
-            print(f"Warning: Inf values detected in positions tensor")
             positions = torch.nan_to_num(positions, posinf=1000.0, neginf=0.0)
 
-        # Compute feature dimension for each spatial direction
         feature_dim = tokens.size(-1) // 2
 
-        # Get frequency components with safe max computation
-        try:
-            max_val = positions.max()
-            if torch.isfinite(max_val):
-                max_position = int(max_val.item()) + 1
-            else:
-                # Fallback to reasonable default
-                max_position = 1000
-                print(f"Warning: Non-finite max position, using fallback: {max_position}")
-        except Exception as e:
-            print(f"Error computing max position: {e}, using fallback")
+        max_val = positions.max()
+        if torch.isfinite(max_val):
+            max_position = int(max_val.item()) + 1
+        else:
             max_position = 1000
         cos_comp, sin_comp = self._compute_frequency_components(feature_dim, max_position, tokens.device, tokens.dtype)
 

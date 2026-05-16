@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Weirong Chen
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 # All rights reserved.
 #
@@ -131,126 +132,15 @@ class Token3DEmbedMLP(nn.Module):
                 )
         else:
             self.emb_layer = None
-        
-        # Register hooks on emb_layer and mlp to monitor for NaN gradients
-        if self.emb_layer is not None:
-            for module in self.emb_layer.modules():
-                if isinstance(module, nn.Linear):
-                    module.weight.register_hook(self._make_grad_hook('emb_layer.weight'))
-                    if module.bias is not None:
-                        module.bias.register_hook(self._make_grad_hook('emb_layer.bias'))
-        
-        for name, module in self.mlp.named_modules():
-            if isinstance(module, nn.Linear):
-                module.weight.register_hook(self._make_grad_hook(f'mlp.{name}.weight'))
-                if module.bias is not None:
-                    module.bias.register_hook(self._make_grad_hook(f'mlp.{name}.bias'))
-    
-    def _make_grad_hook(self, name):
-        """Create a gradient hook that checks for NaN and normalizes extreme values"""
-        def hook(grad):
-            if grad is None:
-                return grad
-            
-            # Check for NaN/Inf
-            if torch.isnan(grad).any() or torch.isinf(grad).any():
-                print(f"[CRITICAL] NaN/Inf in Token3DEmbedMLP.{name} gradient!")
-                print(f"  NaN: {torch.isnan(grad).sum().item()}, Inf: {torch.isinf(grad).sum().item()}")
-                grad = torch.nan_to_num(grad, nan=0.0, posinf=1.0, neginf=-1.0)
-                print(f"  [WARNING] Replaced NaN/Inf with safe values")
-            
-            # Normalize extreme gradients with adaptive scaling
-            grad_norm = torch.norm(grad)
-            max_norm = 10.0  # More conservative for Token3DEmbedMLP
-            
-            return grad
-        return hook
 
-    
     def forward(self, x, cond=None):
         if self.use_cond_embed:
-            # Apply input normalization if enabled
             if self.use_input_norm:
-                x_input = x
                 x = self.input_norm(x)
-                # SAFEGUARD: If norm produces NaN (e.g., zero variance), use original input
-                if torch.isnan(x).any():
-                    print(f"[ERROR] input_norm produced NaN! Using original input.")
-                    x = x_input
-            
-            # RISK: emb_layer can produce NaN if weights have NaN or cond is extreme
             cond_embed = self.emb_layer(cond).type(x.dtype)
-            # SAFEGUARD: Check emb_layer output
-            if torch.isnan(cond_embed).any():
-                print(f"[CRITICAL] emb_layer produced NaN! This indicates NaN in emb_layer weights.")
-                # Check weights
-                for name, param in self.emb_layer.named_parameters():
-                    if torch.isnan(param).any():
-                        print(f"  NaN in {name}: {torch.isnan(param).sum().item()} values")
-                cond_embed = torch.nan_to_num(cond_embed, nan=0.0)
-            
             shift, scale, gate = cond_embed.chunk(3, dim=-1)
-            # SAFEGUARD: Replace NaN before clamping (clamp doesn't fix NaN!)
-            if torch.isnan(shift).any():
-                print(f"[ERROR] shift contains NaN! Replacing with zeros.")
-                shift = torch.nan_to_num(shift, nan=0.0)
-            if torch.isnan(scale).any():
-                print(f"[ERROR] scale contains NaN! Replacing with ones.")
-                scale = torch.nan_to_num(scale, nan=1.0)
-            if torch.isnan(gate).any():
-                print(f"[ERROR] gate contains NaN! Replacing with zeros.")
-                gate = torch.nan_to_num(gate, nan=0.0)
-            
-            # RISK: Clamping range for scale (0.01 to 10.0) might be too wide
-            # Large scale values can cause overflow in modulation
-            # RISK: LayerNorm can produce NaN if variance is zero or input contains NaN
-            x_prenorm = x
-            normed = self.norm(x)
-            # SAFEGUARD: Check norm output
-            if torch.isnan(normed).any():
-                print(f"[ERROR] LayerNorm produced NaN! Using original input.")
-                normed = x_prenorm
-            
-            # RISK: modulate can overflow if scale and normed are both large
-            # modulated = normed * (1 + scale) + shift
-            # Worst case: normed=large, scale=5.0 → 6*large
-            modulated = modulate(normed, shift, scale)
-            # SAFEGUARD: Clamp modulated values to prevent MLP overflow
-            if torch.isnan(modulated).any():
-                print(f"[ERROR] modulate produced NaN!")
-                modulated = torch.nan_to_num(modulated, nan=0.0)
-            # Clamp to reasonable range before MLP
-            modulated = torch.clamp(modulated, min=-50.0, max=50.0)
-            
-            # RISK: MLP can amplify extreme values, GELU can produce NaN with extreme inputs
-            mlp_out = self.mlp(modulated)
-            # SAFEGUARD: Check MLP output
-            if torch.isnan(mlp_out).any():
-                print(f"[CRITICAL] MLP produced NaN! This indicates NaN in MLP weights or extreme input.")
-                # Check MLP weights
-                for name, param in self.mlp.named_parameters():
-                    if torch.isnan(param).any():
-                        print(f"  NaN in mlp.{name}: {torch.isnan(param).sum().item()} values")
-                mlp_out = torch.nan_to_num(mlp_out, nan=0.0)
-            
-            # Clamp MLP output to prevent overflow in gating
-            mlp_out = torch.clamp(mlp_out, min=-100.0, max=100.0)
-            
-            # RISK: gate * mlp_out can produce extreme values
-            # Worst case: gate=10.0, mlp_out=100.0 → 1000.0
-            gated_mlp = gate.unsqueeze(1) * mlp_out
-            # SAFEGUARD: Clamp gated output
-            if torch.isnan(gated_mlp).any():
-                print(f"[ERROR] Gating produced NaN!")
-                gated_mlp = torch.nan_to_num(gated_mlp, nan=0.0)
-            gated_mlp = torch.clamp(gated_mlp, min=-100.0, max=100.0)
-            
-            # RISK: Residual connection x + gated_mlp can overflow if gated_mlp is extreme
-            x = x + gated_mlp
-            # FINAL SAFEGUARD: Ensure output doesn't contain NaN
-            if torch.isnan(x).any():
-                print(f"[CRITICAL] Final output contains NaN! Using prenorm input as fallback.")
-                x = x_prenorm
+            modulated = modulate(self.norm(x), shift, scale)
+            x = x + gate.unsqueeze(1) * self.mlp(modulated)
         else:
             x = x + self.mlp(self.norm(x))
         return x

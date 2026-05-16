@@ -1,5 +1,10 @@
 # Copyright (c) 2026 Weirong Chen
-
+# Copyright (C) 2024-present Naver Corporation. All rights reserved.
+# Licensed under CC BY-NC-SA 4.0 (non-commercial use only).
+#
+# --------------------------------------------------------
+# linear head implementation for DUST3R
+# --------------------------------------------------------
 import torch
 import torch.nn as nn
 import torch.nn.functional as F

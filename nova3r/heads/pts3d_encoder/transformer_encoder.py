@@ -1,4 +1,3 @@
-# Copyright (c) 2026 Weirong Chen
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -106,4 +105,6 @@ if __name__ == '__main__':
 
     model = TransformerEncoder(k=512, df=128, df_out=16, d_point=d_point, cross_depth=6, self_depth=2, hidden_dim=128, num_heads=8)
 
+    # output = model(points)
+    # print(output.shape)  # Expected shape: [B, k, df_out]
     summary(model, input_size=(B, N, d_point))

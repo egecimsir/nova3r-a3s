@@ -18,7 +18,7 @@ while [[ $# -gt 0 ]]; do
     case $1 in
         --model) MODEL="$2"; shift 2 ;;
         --help|-h)
-            echo "Usage: bash $0 [--model scene_n1|scene_n2|scene_ae|all]"
+            echo "Usage: bash $0 [--model scene_n1|scene_n2|all]"
             exit 0 ;;
         *) echo "Unknown argument: $1"; exit 1 ;;
     esac
@@ -40,7 +40,7 @@ download_hf_model() {
         { echo "Failed to download ${name}. Try: huggingface-cli login"; return 1; }
 
     # Download hydra config
-    huggingface-cli download $HF_REPO "${name}/.hydra/config.yaml" --local-dir checkpoints/ 2>/dev/null || true
+    huggingface-cli download $HF_REPO "${name}/.hydra/config.yaml" "${name}/.hydra/hydra.yaml" "${name}/.hydra/overrides.yaml" --local-dir checkpoints/ 2>/dev/null || true
 
     echo -e "${GREEN}✓${NC} ${name} downloaded to ${target_dir}/"
 }
@@ -56,17 +56,13 @@ if [ -z "$MODEL" ] || [ "$MODEL" = "all" ]; then
     echo ""
     download_hf_model "scene_n2" "checkpoint-last.pth"
     echo ""
-    download_hf_model "scene_ae" "checkpoint-last.pth"
-    echo ""
 elif [ "$MODEL" = "scene_n1" ]; then
     download_hf_model "scene_n1" "checkpoint-last.pth"
 elif [ "$MODEL" = "scene_n2" ]; then
     download_hf_model "scene_n2" "checkpoint-last.pth"
-elif [ "$MODEL" = "scene_ae" ]; then
-    download_hf_model "scene_ae" "checkpoint-last.pth"
 else
     echo "Unknown model: $MODEL"
-    echo "Available: scene_n1, scene_n2, scene_ae, all"
+    echo "Available: scene_n1, scene_n2, all"
     exit 1
 fi
 
@@ -76,5 +72,4 @@ echo "Checkpoint Status"
 echo "========================================"
 [ -f "checkpoints/scene_n1/checkpoint-last.pth" ] && echo -e "${GREEN}✓${NC} Scene N=1" || echo "  ✗ Scene N=1"
 [ -f "checkpoints/scene_n2/checkpoint-last.pth" ] && echo -e "${GREEN}✓${NC} Scene N=2" || echo "  ✗ Scene N=2"
-[ -f "checkpoints/scene_ae/checkpoint-last.pth" ] && echo -e "${GREEN}✓${NC} Scene AE" || echo "  ✗ Scene AE"
 echo ""

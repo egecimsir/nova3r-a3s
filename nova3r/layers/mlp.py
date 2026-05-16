@@ -1,3 +1,4 @@
+# Copyright (c) 2026 Weirong Chen
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 # All rights reserved.
 #
@@ -12,7 +13,7 @@
 from typing import Callable, Optional
 
 from torch import Tensor, nn
-import torch
+
 
 class Mlp(nn.Module):
     def __init__(
@@ -33,37 +34,9 @@ class Mlp(nn.Module):
         self.drop = nn.Dropout(drop)
 
     def forward(self, x: Tensor) -> Tensor:
-        # DEBUG: Check input
-        if torch.isnan(x).any() or torch.isinf(x).any():
-            print(f"[ERROR] NaN/Inf in MLP input: shape={x.shape}, nan_count={torch.isnan(x).sum()}, inf_count={torch.isinf(x).sum()}")
-        
         x = self.fc1(x)
-        
-        # DEBUG: Check after fc1
-        if torch.isnan(x).any() or torch.isinf(x).any():
-            print(f"[ERROR] NaN/Inf after fc1: nan={torch.isnan(x).sum()}, inf={torch.isinf(x).sum()}")
-            # Check fc1 weights
-            if torch.isnan(self.fc1.weight).any():
-                print(f"[ERROR] fc1 weights contain NaN!")
-        
         x = self.act(x)
         x = self.drop(x)
-        
-        # DEBUG: Check before fc2 (the problematic layer)
-        if torch.isnan(x).any() or (torch.abs(x) > 1e6).any():
-            print(f"[ERROR] Before fc2: nan={torch.isnan(x).any()}, max_abs={torch.abs(x).max():.4f}")
-        
         x = self.fc2(x)
-        
-        # DEBUG: Check after fc2
-        if torch.isnan(x).any():
-            print(f"[ERROR] NaN after fc2 (this is where backward fails)!")
-            print(f"  Output: nan_count={torch.isnan(x).sum()}, shape={x.shape}")
-            # Check fc2 weights
-            if torch.isnan(self.fc2.weight).any():
-                print(f"[ERROR] fc2 weights contain NaN!")
-            else:
-                print(f"  fc2.weight: min={self.fc2.weight.min():.6f}, max={self.fc2.weight.max():.6f}")
-        
         x = self.drop(x)
         return x

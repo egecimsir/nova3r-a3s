@@ -216,35 +216,6 @@ class AggregatorPts3D(nn.Module):
                 bias=False,
             )
         
-        # Register gradient hook to monitor and normalize gradients on pts3d_token
-        def pts3d_token_grad_hook(grad):
-            # Check for NaN/Inf in gradients
-            if torch.isnan(grad).any() or torch.isinf(grad).any():
-                print(f"[CRITICAL] NaN/Inf detected in pts3d_token gradients!")
-                print(f"  NaN count: {torch.isnan(grad).sum().item()}")
-                print(f"  Inf count: {torch.isinf(grad).sum().item()}")
-                # Replace NaN/Inf with zeros to prevent parameter corruption
-                grad = torch.nan_to_num(grad, nan=0.0, posinf=0.0, neginf=0.0)
-                print(f"  [WARNING] Replaced NaN/Inf gradients with zeros")
-            
-            # Calculate gradient norm and analyze
-            grad_norm = torch.norm(grad)
-            
-            # ADAPTIVE GRADIENT SCALING
-            max_norm = 10.0
-            
-            if grad_norm > max_norm:
-                # Normalize gradient to max_norm
-                scale_factor = max_norm / (grad_norm + 1e-8)
-                grad = grad * scale_factor
-            
-            return grad
-        
-        # Gradient hooks disabled - they can break autograd graph and cause NaN
-        # Let the training loop handle gradient clipping instead
-        
-        # self.pts3d_token.register_hook(pts3d_token_grad_hook)
-        
         if token_3d_embed_config is not None:
             self.token_3d_embed = eval(token_3d_embed_config.name)(**token_3d_embed_config.params)
         else:
@@ -252,82 +223,18 @@ class AggregatorPts3D(nn.Module):
 
     
     def _get_3d_tokens(self, cond=None):
-        # Check for NaN - if found, abort training (don't try to fix)
-        if torch.isnan(self.pts3d_token).any():
-            raise ValueError(f"pts3d_token contains NaN! Training should restart from clean checkpoint.")
-        
         if self.embed_dim == self.token_dim_3d:
             pts3d_tokens = self.pts3d_token
         else:
-            # Check pts3d_token_proj weights for NaN
-            if hasattr(self, 'pts3d_token_proj'):
-                for name, param in self.pts3d_token_proj.named_parameters():
-                    if torch.isnan(param).any():
-                        print(f"[CRITICAL] NaN in pts3d_token_proj.{name}")
-                        with torch.no_grad():
-                            param[torch.isnan(param)] = 0.0
-            
             pts3d_tokens = self.pts3d_token_proj(self.pts3d_token)
             pts3d_tokens = pts3d_tokens.view(1, self.num_3d_tokens, self.embed_dim)
-            
-            # Clamp extreme values that could cause downstream NaN
-            pts3d_tokens = torch.clamp(pts3d_tokens, min=-10.0, max=10.0)
-        
-        if self.token_3d_embed is not None:
-            # pts3d_tokens   B, S, C
-            # cond:          B, C
-            
-            # SAFEGUARD: Check cond (class_tokens) for NaN before processing
-            if torch.isnan(cond).any():
-                print(f"[ERROR] cond (class_tokens) contains NaN before token_3d_embed processing!")
-                print(f"  NaN count: {torch.isnan(cond).sum().item()} / {cond.numel()}")
-                # Replace NaN with zeros as emergency fallback
-                cond = torch.nan_to_num(cond, nan=0.0)
-                print(f"  [WARNING] Replaced NaN in cond with zeros")
-            
-            if self.token_3d_embed.use_cond_embed == 'first':
-                cond = cond[:, 0] # use the first frame only
-            elif self.token_3d_embed.use_cond_embed == 'mean':
-                cond = cond.mean(dim=1) # use the mean of all frames
-            
-            has_nan_input = torch.isnan(pts3d_tokens).any() or torch.isnan(cond).any()
-            if has_nan_input:
-                print(f"[ERROR] NaN in inputs BEFORE token_3d_embed!")
-                if torch.isnan(pts3d_tokens).any():
-                    print(f"  pts3d_tokens NaN count: {torch.isnan(pts3d_tokens).sum().item()}")
-                if torch.isnan(cond).any():
-                    print(f"  cond NaN count: {torch.isnan(cond).sum().item()}")
-            
-            # Check token_3d_embed weights for NaN
-            for name, param in self.token_3d_embed.named_parameters():
-                if torch.isnan(param).any():
-                    print(f"[ERROR] NaN in token_3d_embed weight: {name}")
-                    print(f"  NaN count: {torch.isnan(param).sum().item()} / {param.numel()}")
-            
-            # Check for extreme values that might cause NaN in forward
-            if (torch.abs(pts3d_tokens) > 1e6).any():
-                print(f"[WARNING] Extreme values in pts3d_tokens: max_abs={torch.abs(pts3d_tokens).max().item()}")
-            if (torch.abs(cond) > 1e6).any():
-                print(f"[WARNING] Extreme values in cond: max_abs={torch.abs(cond).max().item()}")
-            
-            # Register hook on pts3d_tokens to track gradient BEFORE token_3d_embed
-            pts3d_tokens_before_embed = pts3d_tokens.clone().requires_grad_(True)
-            
-            def pts3d_tokens_pre_embed_hook(grad):
-                if torch.norm(grad) > 10.0:
-                    print(f"[GRADIENT FLOW] Gradient entering token_3d_embed: norm={torch.norm(grad).item():.2f}")
-                return grad
-            
-            # pts3d_tokens_before_embed.register_hook(pts3d_tokens_pre_embed_hook)
-            
-            pts3d_tokens = self.token_3d_embed(pts3d_tokens_before_embed, cond=cond)
-            
-            if torch.isnan(pts3d_tokens).any():
-                print(f"[ERROR] NaN in pts3d_tokens AFTER token_3d_embed!")
-                print(f"  NaN count: {torch.isnan(pts3d_tokens).sum().item()}")
-                print(f"  Output stats: min={pts3d_tokens[~torch.isnan(pts3d_tokens)].min().item() if (~torch.isnan(pts3d_tokens)).any() else 'all NaN'}, max={pts3d_tokens[~torch.isnan(pts3d_tokens)].max().item() if (~torch.isnan(pts3d_tokens)).any() else 'all NaN'}")
-                raise ValueError("NaN detected in token_3d_embed output!")
 
+        if self.token_3d_embed is not None:
+            if self.token_3d_embed.use_cond_embed == 'first':
+                cond = cond[:, 0]
+            elif self.token_3d_embed.use_cond_embed == 'mean':
+                cond = cond.mean(dim=1)
+            pts3d_tokens = self.token_3d_embed(pts3d_tokens, cond=cond)
 
         if self.add_camera_token_3d:
             # add camera token to 3D tokens
@@ -474,16 +381,7 @@ class AggregatorPts3D(nn.Module):
         # Concatenate special tokens with patch tokens
         tokens = torch.cat([camera_token, register_token, patch_tokens], dim=1)
         # (B*S, P+5, C)
-        
-        # Register gradient hook on tokens for comparison
-        if tokens.requires_grad:
-            def tokens_grad_hook(grad):
-                grad_norm = torch.norm(grad)
-                if grad_norm > 10.0:
-                    print(f"[GRADIENT COMPARISON] tokens (camera+register+patch): norm={grad_norm.item():.2f}")
-                return grad
-            # tokens.register_hook(tokens_grad_hook)
-  
+
         pos = None
         if self.rope is not None:
             pos = self.position_getter(B * S, H // self.patch_size, W // self.patch_size, device=images.device)

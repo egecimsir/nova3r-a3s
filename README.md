@@ -53,12 +53,14 @@ conda activate nova3r
 # Single image (scene-level)
 python demo_nova3r.py \
   --images demo/examples/scene_1.png \
-  --ckpt checkpoints/scene_n1/checkpoint-last.pth
+  --ckpt checkpoints/scene_n1/checkpoint-last.pth \
+  --resolution 518 392
 
 # Two images (multi-view, scene-level)
 python demo_nova3r.py \
   --images demo/examples/scrream_scene09_200.png demo/examples/scrream_scene09_275.png \
-  --ckpt checkpoints/scene_n2/checkpoint-last.pth
+  --ckpt checkpoints/scene_n2/checkpoint-last.pth \
+  --resolution 518 392
 ```
 
 Output `.ply` point clouds and `.mp4` 360° videos are saved to `demo/outputs/<image_name>/` (configurable with `--output_dir`).

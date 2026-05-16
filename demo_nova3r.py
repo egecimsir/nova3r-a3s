@@ -32,8 +32,8 @@ def parse_args():
                         help="Output directory (default: demo/outputs/)")
     parser.add_argument("--num_queries", type=int, default=50000,
                         help="Number of query points (default: 50000)")
-    parser.add_argument("--resolution", type=int, nargs='+', default=[518, 392],
-                        help="Resolution as W H (default: 518 392)")
+    parser.add_argument("--resolution", type=int, nargs='+', default=None,
+                        help="Override resolution as W H (e.g., --resolution 518 392)")
     parser.add_argument("--device", default="cuda",
                         help="Device (default: cuda)")
     args = parser.parse_args()
