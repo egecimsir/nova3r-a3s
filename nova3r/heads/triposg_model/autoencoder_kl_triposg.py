@@ -15,11 +15,9 @@ from einops import repeat
 from torch_cluster import fps
 from tqdm import tqdm
 
-import sys
-sys.path.append("./third_party")
-
-from triposg.models.transformers.triposg_transformer import DiTBlock
-from triposg.models.embeddings import FrequencyPositionalEmbedding
+from nova3r._vendor.triposg.models.transformers.triposg_transformer import DiTBlock
+from nova3r._vendor.triposg.models.embeddings import FrequencyPositionalEmbedding
+from nova3r.utils.device import autocast as _nova3r_autocast
 
 
 logger = logging.get_logger(__name__)  # pylint: disable=invalid-name
@@ -244,7 +242,7 @@ class TripoSGDecoder(nn.Module):
     ):
         logits = model_fn(queries, sample)
         if grad:
-            with torch.autocast(device_type="cuda", dtype=torch.float32):
+            with _nova3r_autocast(queries, dtype=torch.float32):
                 if self.grad_type == "numerical":
                     interval = self.grad_interval
                     grad_value = []

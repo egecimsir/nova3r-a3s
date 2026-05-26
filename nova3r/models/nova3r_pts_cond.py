@@ -9,6 +9,7 @@ from torch_cluster import fps
 
 from nova3r.heads.dpt_head import DPTHead
 from nova3r.heads.pts3d_decoder import *
+from nova3r.utils.device import autocast
 from nova3r.heads.triposg_model.autoencoder_kl_triposg import (
     FrequencyPositionalEmbedding,
     TripoSGEncoder,
@@ -293,7 +294,7 @@ class Nova3rPtsCond(nn.Module, PyTorchModelHubMixin):
 
         num_views = torch.ones(B, device=images.device) * S
 
-        with torch.cuda.amp.autocast(enabled=False):
+        with autocast(tokens, enabled=False):
             tokens = tokens.float()
 
             if self.pts3d_head is not None:

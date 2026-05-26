@@ -1,33 +1,27 @@
-# Core dependencies
-torch
+# Core dependencies (required for import and inference)
+torch>=2.2
 torchvision
+numpy
 einops
 scipy
-numpy
 tqdm
 opencv-python
-matplotlib
-trimesh
-roma
+Pillow
 
-# Config
+# Config / checkpoint loading
 omegaconf
-hydra-core
 
-# 3D reconstruction
+# Diffusion / flow-matching primitives
 diffusers
 flow-matching
-open3d
-chamferdist
+torchdiffeq
 
-# Video rendering
-imageio
-imageio-ffmpeg
+# HuggingFace checkpoint hub
+huggingface-hub>=0.22
 
-# UI
-gradio
-huggingface-hub[torch]>=0.22
+# Point sampling (used by nova3r.utils.sampling and the triposg AE)
+torch-cluster
+# pytorch3d  # required only for FPS/k-NN sampling paths; install separately
 
-# Misc
-pyglet<2
-safetensors
+# Optional: PLY I/O for save_pointcloud_ply / predict(output_path=...)
+# open3d

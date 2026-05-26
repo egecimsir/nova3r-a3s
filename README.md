@@ -1,133 +1,92 @@
-<p align="center">
-  <img src="assets/nova3r_logo.png" alt="NOVA3R logo" width="224">
-</p>
+# NOVA3R (minimal module fork)
 
-<p align="center">
-  <a href="https://arxiv.org/abs/2603.04179"><img src="https://img.shields.io/badge/arXiv-2603.04179-b31b1b.svg" alt="arXiv"></a>
-  <a href="https://wrchen530.github.io/nova3r/"><img src="https://img.shields.io/badge/Project-Page-blue.svg" alt="Project Page"></a>
-  <a href="https://www.apache.org/licenses/LICENSE-2.0"><img src="https://img.shields.io/badge/License-Apache%202.0-blue.svg" alt="License: Apache 2.0"></a>
-</p>
+A pruned, importable fork of [NOVA3R](https://github.com/wrchen530/nova3r) — keeps only what is needed to **import, run inference, and train** the model from another project. Demo scripts, evaluation pipeline, benchmark datasets, and Gradio UI have been removed.
 
-# NOVA3R: Non-pixel-aligned Visual Transformer for Amodal 3D Reconstruction
+> **NOVA3R: Non-pixel-aligned Visual Transformer for Amodal 3D Reconstruction** — Chen, Zheng, Zhang, Vedaldi, Cremers. ICLR 2026.
+> [[Paper]](https://arxiv.org/abs/2603.04179) [[Project page]](https://wrchen530.github.io/nova3r/) [[Upstream repo]](https://github.com/wrchen530/nova3r)
 
-**[ICLR 2026]** The repository contains the official implementation of [NOVA3R](https://wrchen530.github.io/nova3r/). Given unposed multi-view images, **NOVA3R** recovers complete, non-overlapping 3D geometry, reconstructing visible and occluded regions with physical plausibility.
-
-
-> **NOVA3R: Non-pixel-aligned Visual Transformer for Amodal 3D Reconstruction**<br> 
-> [Weirong Chen](https://wrchen530.github.io/), [Chuanxia Zheng](https://physicalvision.github.io/people/~chuanxia), [Ganlin Zhang](https://ganlinzhang.xyz/), [Andrea Vedaldi](https://www.robots.ox.ac.uk/~vedaldi/), [Daniel Cremers](https://cvg.cit.tum.de/members/cremers) <br> 
-> ICLR 2026
-
-**[[Paper](https://arxiv.org/abs/2603.04179)] [[Project Page](https://wrchen530.github.io/nova3r/)]**
-
-![NOVA3R teaser](assets/nova3r_teaser.gif)
-
-## Requirements
-
-- **Python**: 3.10
-- **PyTorch**: 2.2+ with CUDA 12.1+
-- **GPU**: NVIDIA GPU with ≥24GB VRAM (48GB recommended). Evaluated on NVIDIA L40s GPU.
-
-## Installation
+## Install
 
 ```bash
-# Clone with submodules
-git clone --recursive https://github.com/wrchen530/nova3r.git
-cd nova3r
-
-# Automated setup
-bash setup.sh
-
-# Download checkpoints
-bash scripts/download_checkpoints.sh
+pip install -e .
+# optional: PLY export
+pip install -e ".[io]"
 ```
 
-See [docs/INSTALL.md](docs/INSTALL.md) for manual installation.
+Requirements: Python 3.10+, PyTorch 2.2+ with CUDA 12.1+, an NVIDIA GPU (>=24 GB VRAM recommended).
 
-## Demo
+`torch-cluster` and (optionally) `pytorch3d` must match your installed PyTorch / CUDA version — see their docs.
 
-Run 3D reconstruction on your own images:
-
-```bash
-conda activate nova3r
-
-# Single image (scene-level)
-python demo_nova3r.py \
-  --images demo/examples/scene_1.png \
-  --ckpt checkpoints/scene_n1/checkpoint-last.pth \
-  --resolution 518 392
-
-# Two images (multi-view, scene-level)
-python demo_nova3r.py \
-  --images demo/examples/scrream_scene09_200.png demo/examples/scrream_scene09_275.png \
-  --ckpt checkpoints/scene_n2/checkpoint-last.pth \
-  --resolution 518 392
-```
-
-Output `.ply` point clouds and `.mp4` 360° videos are saved to `demo/outputs/<image_name>/` (configurable with `--output_dir`).
-
-### Point Cloud AE
-
-Reconstruct a point cloud using the Stage 1 point-conditioned autoencoder:
-
-```bash
-# Point cloud autoencoding from a SCRREAM scene
-python demo_nova3r_ae.py \
-  --input_ply demo/examples/scrream_scene09.ply \
-  --ckpt checkpoints/scene_ae/checkpoint-last.pth \
-  --num_queries 50000
-```
-
-### Python API
+## Usage
 
 ```python
-from demo_nova3r import predict
+import nova3r
 
-# Single image → 3D point cloud
-pts3d = predict(
+# End-to-end: image(s) -> (N, 3) numpy point cloud.
+# device defaults to None (auto-picks cuda > mps > cpu).
+pts = nova3r.predict(
     ckpt_path="checkpoints/scene_n1/checkpoint-last.pth",
     image_paths=["path/to/image.png"],
     resolution=(518, 392),
-    output_path="output.ply",
+    output_path="output.ply",   # optional, requires nova3r[io]
 )
-# pts3d is a numpy array of shape (N, 3)
 ```
+
+Device selection is fully flexible — pass any of `None` (auto), a string, a `torch.device`, or omit entirely:
+
+```python
+import torch, nova3r
+
+nova3r.predict(..., device=None)                       # auto: cuda > mps > cpu
+nova3r.predict(..., device="cpu")
+nova3r.predict(..., device="mps")                      # Apple Silicon
+nova3r.predict(..., device=torch.device("cuda:1"))
+```
+
+Lower-level API:
+
+```python
+from nova3r import Nova3rImgCond, load_model, load_images, make_pairs, inference_nova3r
+from nova3r.utils.device import get_default_device
+
+device = get_default_device()
+model, cfg = load_model("checkpoints/scene_n1/checkpoint-last.pth", device=device)
+images = load_images(["a.png", "b.png"], size=518)
+pairs = make_pairs(images, scene_graph="complete", prefilter=None, symmetrize=False)
+out = inference_nova3r(cfg, pairs, model, device=device, batch_size=1, num_queries=20000)
+```
+
+For training, instantiate `Nova3rImgCond` / `Nova3rPtsCond` directly and supply your own dataset, loss, and optimizer loop. The models' `forward` returns predictions (not a loss).
 
 ## Checkpoints
 
-Download all checkpoints:
-```bash
-bash scripts/download_checkpoints.sh
+Download via [`scripts/download_checkpoints.sh`](scripts/download_checkpoints.sh) (HuggingFace).
+
+| Model | Input | Path |
+|---|---|---|
+| `Nova3rPtsCond` (AE) | point cloud | `checkpoints/scene_ae/` |
+| `Nova3rImgCond` (N=1) | 1 image | `checkpoints/scene_n1/` |
+| `Nova3rImgCond` (N=2) | 2 images | `checkpoints/scene_n2/` |
+
+Each checkpoint directory must contain `.hydra/config.yaml` (the downloader handles this).
+
+## Layout
+
+```
+nova3r/
+  inference.py          # inference_nova3r + flow-matching glue
+  io.py                 # load_images, make_pairs, save_pointcloud_ply, load_model, predict
+  models/               # Nova3rImgCond, Nova3rPtsCond, BatchModelWrapper, aggregator
+  heads/                # DPT head, pts3d encoder/decoder, TripoSG AE wrapper
+  layers/               # transformer blocks, attention, rope, etc.
+  flow_matching/        # paths, schedulers, ODE solver
+  utils/                # device, geometry, misc, image, image_pairs, sampling
+  _vendor/
+    croco/models/blocks.py
+    triposg/            # full vendored package
 ```
 
-| Model | Training Dataset | Input | Checkpoint | Size |
-|-------|---------|-------|------------|------|
-| Pts2Pts (AE) | 3DFront + Scannetpp | point cloud | `checkpoints/scene_ae/checkpoint-last.pth` | 262 MB |
-| Img2Pts (N=1) | 3DFront + Scannetpp | 1 image | `checkpoints/scene_n1/checkpoint-last.pth` | 5.8 GB |
-| Img2Pts (N=2) | 3DFront + Scannetpp | 2 images | `checkpoints/scene_n2/checkpoint-last.pth` | 5.8 GB |
-
-Checkpoints are hosted on [HuggingFace](https://huggingface.co/wrchen530/nova3r).
-
-## Evaluation
-
-Reproduce benchmark results:
-
-```bash
-# Download datasets
-bash scripts/download_datasets.sh
-
-# SCRREAM evaluation (1-view / 2-view)
-bash scripts/eval/eval_scrream_n1_stage2.sh --data_root /path/to/datasets
-bash scripts/eval/eval_scrream_n2_stage2.sh --data_root /path/to/datasets
-```
-
-See [docs/EVALUATION.md](docs/EVALUATION.md) for detailed instructions.
-
-
-
-
-## BibTeX
-
-If you find NOVA3R useful for your research and applications, please cite us using this BibTex:
+## Citation
 
 ```bibtex
 @inproceedings{chennova3r,
@@ -140,9 +99,7 @@ If you find NOVA3R useful for your research and applications, please cite us usi
 
 ## License
 
-This project is licensed under the Apache License 2.0. See [LICENSE](LICENSE) for full terms. Third-party code (e.g., [DUSt3R](https://github.com/naver/dust3r), [CroCo](https://github.com/naver/croco), [VGGT](https://huggingface.co/facebook/VGGT-1B), [TripoSG](https://github.com/VAST-AI-Research/TripoSG)) retains its original license.
-
-
-## Acknowledgments
-
-We build on prior advances in multi-view 3D reconstruction, global scene representations, and flow-based generative models. Our codebase utilizes code from [VGGT](https://huggingface.co/facebook/VGGT-1B), [DUSt3R](https://github.com/naver/dust3r), [TripoSG](https://github.com/VAST-AI-Research/TripoSG), and [LaRI](https://ruili3.github.io/lari/). We sincerely appreciate the authors for their wonderful work and for releasing their code and data processing scripts.
+NOVA3R is Apache 2.0 (see `LICENSE`). Vendored third-party code retains its original licenses (see `NOTICES`):
+- CroCo (`nova3r/_vendor/croco/`) — CC BY-NC-SA 4.0
+- TripoSG (`nova3r/_vendor/triposg/`) — MIT
+- DUSt3R-derived utilities (`nova3r/utils/`) — CC BY-NC-SA 4.0

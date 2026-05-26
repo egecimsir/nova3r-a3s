@@ -1,0 +1,46 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nova3r"
+version = "0.1.0"
+description = "NOVA3R: Non-pixel-aligned Visual Transformer for Amodal 3D Reconstruction"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { file = "LICENSE" }
+authors = [
+    { name = "Weirong Chen" },
+]
+dependencies = [
+    "torch>=2.2",
+    "torchvision",
+    "numpy",
+    "einops",
+    "scipy",
+    "tqdm",
+    "opencv-python",
+    "Pillow",
+    "omegaconf",
+    "diffusers",
+    "flow-matching",
+    "torchdiffeq",
+    "huggingface-hub>=0.22",
+    "torch-cluster",
+]
+
+[project.optional-dependencies]
+# PLY export helpers
+io = ["open3d"]
+# Required only for FPS / k-NN sampling code paths in nova3r.utils.sampling.
+# pytorch3d wheels are not on PyPI for all platforms — install from source if needed.
+sampling = ["pytorch3d"]
+
+[project.urls]
+Homepage = "https://wrchen530.github.io/nova3r/"
+Paper = "https://arxiv.org/abs/2603.04179"
+Repository = "https://github.com/wrchen530/nova3r"
+
+[tool.setuptools.packages.find]
+include = ["nova3r*"]
+exclude = ["tests*"]

@@ -14,7 +14,7 @@ from einops import rearrange, repeat
 import math
 import time
 
-from croco.models.blocks import DecoderBlock
+from nova3r._vendor.croco.models.blocks import DecoderBlock
 from nova3r.layers.rope import RotaryPositionEmbedding2D, RotaryPositionEmbedding4D, PositionGetter
 from nova3r.layers.block import Block
 from nova3r.layers import PatchEmbed

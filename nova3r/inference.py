@@ -10,9 +10,9 @@ import tqdm
 import torch
 import torch.nn.functional as F
 
-from dust3r.utils.device import to_cpu, collate_with_cat
-from dust3r.utils.misc import invalid_to_zeros
-from dust3r.utils.geometry import geotrf, inv
+from nova3r.utils.device import to_cpu, collate_with_cat, autocast
+from nova3r.utils.misc import invalid_to_zeros
+from nova3r.utils.geometry import geotrf, inv
 
 # flow_matching
 from nova3r.flow_matching.path.scheduler import CosineScheduler
@@ -314,7 +314,7 @@ def loss_of_one_batch_lari(args, batch, model, criterion, device, use_amp=False,
         return sol
 
     with torch.no_grad():
-        with torch.cuda.amp.autocast(enabled=True, dtype=amp_dtype_mapping[args.amp_dtype]):
+        with autocast(device, dtype=amp_dtype_mapping[args.amp_dtype]):
             pts3d_xyz_list = process_point(args, images, pts3d_src_norm, token_mask, num_queries, device, model_wrapper=model_wrapper, method=fm_sampling)
 
     pts3d_xyz = pts3d_xyz_list[-1] 
@@ -326,7 +326,7 @@ def loss_of_one_batch_lari(args, batch, model, criterion, device, use_amp=False,
     pred_dict['input_pts3d'] = pts3d_src
     pred_dict['input_valid'] = valid_src
 
-    with torch.cuda.amp.autocast(enabled=bool(use_amp), dtype=amp_dtype_mapping[args.amp_dtype]):
+    with autocast(device, dtype=amp_dtype_mapping[args.amp_dtype], enabled=bool(use_amp)):
         pts3d_data, loss = criterion(batch, pred_dict) if criterion is not None else None
 
     result = dict(view=batch, pred=pred_dict, data=pts3d_data, loss=loss)
@@ -398,7 +398,7 @@ def loss_of_one_batch_demo(args, batch, model, criterion, device, use_amp=False,
         pointmaps, _ = normalize_input(pointmaps, valid, pointmaps, valid, mode=norm_mode)
 
     with torch.no_grad():
-        with torch.cuda.amp.autocast(enabled=True):
+        with autocast(device):
             pts3d_xyz = process_point(args, images, pointmaps, token_mask, num_queries, device, model_wrapper=model_wrapper, method=method)
 
     pred_dict = {}

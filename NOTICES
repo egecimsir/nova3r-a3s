@@ -1,0 +1,36 @@
+NOVA3R Bundled Third-Party Notices
+==================================
+
+This package vendors code from the following projects under `nova3r/_vendor/`.
+Original licenses apply to those files. See upstream repositories for full text.
+
+CroCo (Naver Corp., 2022-present)
+---------------------------------
+Files: nova3r/_vendor/croco/models/blocks.py
+License: CC BY-NC-SA 4.0
+  https://creativecommons.org/licenses/by-nc-sa/4.0/legalcode
+blocks.py is a modified form of code from rwightman/pytorch-image-models
+(Apache 2.0): https://github.com/rwightman/pytorch-image-models
+
+TripoSG (VAST-AI-Research)
+--------------------------
+Files: nova3r/_vendor/triposg/**
+License: MIT (see https://github.com/VAST-AI-Research/TripoSG)
+
+DUSt3R utilities (Naver Corp.)
+------------------------------
+Files: nova3r/utils/{device,misc,geometry,image,image_pairs}.py
+License: CC BY-NC-SA 4.0 (non-commercial)
+  https://github.com/naver/dust3r
+
+VGGT (Meta / Facebook AI Research)
+----------------------------------
+Portions of nova3r/models/aggregator_pts3d.py and nova3r/layers/** are derived
+from VGGT (https://huggingface.co/facebook/VGGT-1B).
+
+LaRI
+----
+Some data utilities and design choices are based on LaRI
+(https://ruili3.github.io/lari/\).
+
+NOVA3R itself is released under the Apache License 2.0 (see LICENSE).
