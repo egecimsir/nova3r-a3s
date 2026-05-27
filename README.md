@@ -14,10 +14,17 @@ A minimal, self-contained Python package derived from [NOVA3R](https://github.co
 > **NOVA3R: Non-pixel-aligned Visual Transformer for Amodal 3D Reconstruction** — Chen, Zheng, Zhang, Vedaldi, Cremers. ICLR 2026.
 > [[Paper]](https://arxiv.org/abs/2603.04179) · [[Project page]](https://wrchen530.github.io/nova3r/) · [[Upstream repo]](https://github.com/wrchen530/nova3r)
 
+**Stage 1** — A flow-matching autoencoder learns latent scene tokens from complete point clouds.
 
-![NOVA3R Pipeline](nova3r_pipeline.jpg)
+**Stage 2** — A multi-view image encoder maps images into the same latent space using learnable initial tokens, trained with frozen Stage 1 decoder weights.
 
-**Stage 1** — A flow-matching autoencoder learns latent scene tokens from complete point clouds. **Stage 2** — A multi-view image encoder maps images into the same latent space using learnable initial tokens, trained with frozen Stage 1 decoder weights.
+![NOVA3R Pipeline](assets/nova3r_pipeline.jpg)
+
+**Different Decoder Architectures** - The independent decoder uses cross-attention only,
+while the joint decoder implements an efficient self-attention, which yields more precise structures.
+
+
+![NOVA3R Decoder Architectures](assets/nova3r_decoders.png)
 
 ---
 
