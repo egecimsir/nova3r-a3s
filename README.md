@@ -1,9 +1,17 @@
-# NOVA3R
+# NOVA3R - Minimal Codebase
+
+> **This codebase is part of the [Amodal3DSeg (A3S)](https://github.com/egecimsir/nova3r-a3s) project.** 
 
 A minimal, self-contained Python package derived from [NOVA3R](https://github.com/wrchen530/nova3r), providing the model architecture, inference pipeline, and associated utilities. Demo scripts, evaluation pipelines, benchmark datasets, and the Gradio UI are not included.
 
+
 > **NOVA3R: Non-pixel-aligned Visual Transformer for Amodal 3D Reconstruction** — Chen, Zheng, Zhang, Vedaldi, Cremers. ICLR 2026.
 > [[Paper]](https://arxiv.org/abs/2603.04179) · [[Project page]](https://wrchen530.github.io/nova3r/) · [[Upstream repo]](https://github.com/wrchen530/nova3r)
+
+
+![NOVA3R Pipeline](nova3r_pipeline.jpg)
+
+**Stage 1** — A flow-matching autoencoder learns latent scene tokens from complete point clouds. **Stage 2** — A multi-view image encoder maps images into the same latent space using learnable initial tokens, trained with frozen Stage 1 decoder weights.
 
 ---
 
