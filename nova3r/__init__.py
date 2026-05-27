@@ -10,6 +10,8 @@ from nova3r.io import (
     load_model,
     predict,
 )
+from nova3r.utils.device import get_default_device, resolve_device, autocast
+from nova3r.scripts.download_checkpoints import download_checkpoints
 
 __all__ = [
     "Nova3rImgCond",
@@ -21,4 +23,8 @@ __all__ = [
     "save_pointcloud_ply",
     "load_model",
     "predict",
+    "get_default_device",
+    "resolve_device",
+    "autocast",
+    "download_checkpoints",
 ]

@@ -36,6 +36,9 @@ io = ["open3d"]
 # pytorch3d wheels are not on PyPI for all platforms — install from source if needed.
 sampling = ["pytorch3d"]
 
+[project.scripts]
+nova3r-download = "nova3r.scripts.download_checkpoints:main"
+
 [project.urls]
 Homepage = "https://wrchen530.github.io/nova3r/"
 Paper = "https://arxiv.org/abs/2603.04179"
