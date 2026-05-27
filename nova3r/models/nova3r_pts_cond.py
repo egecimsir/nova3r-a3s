@@ -35,8 +35,8 @@ class Nova3rPtsCond(nn.Module, PyTorchModelHubMixin):
         num_3d_tokens=512,
         cfg=None,
         classifier_free_guidance_drop_prob=0.0,
-    ):
-        """3D Shape Tokenization Implementation."""
+    ) -> None:
+        """Build the point-conditioned NOVA3R autoencoder from a Hydra ``cfg`` node."""
         super().__init__()
         self.cfg = cfg
 
@@ -325,24 +325,33 @@ class Nova3rPtsCond(nn.Module, PyTorchModelHubMixin):
         self,
         images: torch.Tensor,
         pointmaps: torch.Tensor,
-        token_mask: torch.Tensor = None,
-        query_points: torch.Tensor = None,
-        timestep: torch.Tensor = None,
+        token_mask: Optional[torch.Tensor] = None,
+        query_points: Optional[torch.Tensor] = None,
+        timestep: Optional[torch.Tensor] = None,
         **kwargs,
-    ):
-        """Full forward pass: encode point cloud, then decode to 3D predictions.
+    ) -> dict:
+        """Encode the input point cloud and decode to 3D predictions.
 
-        Args:
-            images (torch.Tensor): Reference images with shape [B, S, C, H, W].
-            pointmaps (torch.Tensor): Input point cloud with shape [B, N, 3].
-            token_mask (torch.Tensor, optional): Mask for tokens. Default: None.
-            query_points (torch.Tensor, optional): Query points for decoding.
-                Shape: [N, 2] or [B, N, 2]. Default: None.
-            timestep (torch.Tensor, optional): Timestep for flow matching /
-                diffusion. Default: None.
+        Parameters
+        ----------
+        images
+            Reference images with shape ``(B, S, C, H, W)``.
+        pointmaps
+            Input point cloud with shape ``(B, N, 3)``.
+        token_mask
+            Optional binary mask over scene tokens.
+        query_points
+            Optional query points for the decoder, shape ``(N, 2)`` or
+            ``(B, N, 2)``.
+        timestep
+            Optional flow-matching / diffusion timestep tensor.
+        **kwargs
+            Forwarded to the decoder; accepted for solver compatibility.
 
-        Returns:
-            dict: Predictions including 'pts3d_xyz', 'images', and 'S'.
+        Returns
+        -------
+        dict
+            Predictions including ``'pts3d_xyz'``, ``'images'``, and ``'S'``.
         """
         B, N, C = pointmaps.shape
 

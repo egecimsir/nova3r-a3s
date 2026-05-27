@@ -9,6 +9,30 @@ import torch
 
 
 def make_pairs(imgs, scene_graph='complete', prefilter=None, symmetrize=True):
+    """Build an ordered list of image pairs from a sequence of views.
+
+    Parameters
+    ----------
+    imgs
+        Sequence of image dicts as produced by :func:`nova3r.load_images`.
+    scene_graph
+        Graph topology controlling which pairs are emitted. Supported values:
+
+        * ``'complete'`` — every unordered pair (default).
+        * ``'swin-K'`` / ``'swin-K-noncyclic'`` — sliding window of size ``K``.
+        * ``'logwin-K'`` / ``'logwin-K-noncyclic'`` — power-of-two offsets up to ``2**(K-1)``.
+        * ``'oneref'`` / ``'oneref-I'`` — all pairs against reference index ``I`` (default ``0``).
+    prefilter
+        Optional pair filter. ``'seqK'`` keeps only pairs with index distance
+        ``≤ K``; ``'cycK'`` does the same with cyclic wrap-around.
+    symmetrize
+        If ``True``, each ``(a, b)`` pair also yields its ``(b, a)`` counterpart.
+
+    Returns
+    -------
+    list[tuple[dict, dict]]
+        The list of pairs.
+    """
     pairs = []
     if scene_graph == 'complete':  # complete graph
         for i in range(len(imgs)):
@@ -69,6 +93,7 @@ def make_pairs(imgs, scene_graph='complete', prefilter=None, symmetrize=True):
 
 
 def sel(x, kept):
+    """Recursively index ``x`` along its first axis by ``kept`` (dict/tensor/list/tuple)."""
     if isinstance(x, dict):
         return {k: sel(v, kept) for k, v in x.items()}
     if isinstance(x, (torch.Tensor, np.ndarray)):
@@ -78,6 +103,7 @@ def sel(x, kept):
 
 
 def _filter_edges_seq(edges, seq_dis_thr, cyclic=False):
+    """Return the indices of ``edges`` whose ``|i - j|`` is at most ``seq_dis_thr``."""
     # number of images
     n = max(max(e) for e in edges) + 1
 
@@ -92,12 +118,14 @@ def _filter_edges_seq(edges, seq_dis_thr, cyclic=False):
 
 
 def filter_pairs_seq(pairs, seq_dis_thr, cyclic=False):
+    """Keep pairs whose source/target indices are at most ``seq_dis_thr`` apart."""
     edges = [(img1['idx'], img2['idx']) for img1, img2 in pairs]
     kept = _filter_edges_seq(edges, seq_dis_thr, cyclic=cyclic)
     return [pairs[i] for i in kept]
 
 
 def filter_edges_seq(view1, view2, pred1, pred2, seq_dis_thr, cyclic=False):
+    """Like :func:`filter_pairs_seq` but operating on already-collated view dicts and predictions."""
     edges = [(int(i), int(j)) for i, j in zip(view1['idx'], view2['idx'])]
     kept = _filter_edges_seq(edges, seq_dis_thr, cyclic=cyclic)
     print(f'>> Filtering edges more than {seq_dis_thr} frames apart: kept {len(kept)}/{len(edges)} edges')

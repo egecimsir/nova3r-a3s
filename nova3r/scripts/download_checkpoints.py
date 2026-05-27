@@ -122,6 +122,12 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
+    """Entry point for the ``nova3r-download`` console script.
+
+    Parses CLI arguments and delegates to :func:`download_checkpoints`. Returns
+    ``0`` on success, ``1`` on failure; a hint about ``huggingface-cli login``
+    is printed for typical auth errors.
+    """
     args = _build_parser().parse_args(argv)
     try:
         download_checkpoints(

@@ -24,6 +24,7 @@ ImgNorm = tvf.Compose([tvf.ToTensor(), tvf.Normalize((0.5, 0.5, 0.5), (0.5, 0.5,
 
 
 def img_to_arr( img ):
+    """Return ``img`` as a NumPy array, loading from disk via :func:`imread_cv2` if it is a path."""
     if isinstance(img, str):
         img = imread_cv2(img)
     return img
@@ -42,6 +43,7 @@ def imread_cv2(path, options=cv2.IMREAD_COLOR):
 
 
 def rgb(ftensor, true_shape=None):
+    """Convert a normalized image tensor (or list/array) to ``[0, 1]`` HWC RGB."""
     if isinstance(ftensor, list):
         return [rgb(x, true_shape=true_shape) for x in ftensor]
     if isinstance(ftensor, torch.Tensor):
@@ -61,6 +63,7 @@ def rgb(ftensor, true_shape=None):
 
 
 def _resize_pil_image(img, long_edge_size):
+    """Resize ``img`` so its longest edge equals ``long_edge_size`` (LANCZOS / BICUBIC)."""
     S = max(img.size)
     if S > long_edge_size:
         interp = PIL.Image.LANCZOS
@@ -71,7 +74,33 @@ def _resize_pil_image(img, long_edge_size):
 
 
 def load_images(folder_or_list, size, square_ok=False, verbose=True):
-    """ open and convert all images in a list or folder to proper input format for DUSt3R
+    """Load images from a folder or list and normalize them for the model.
+
+    Each image is read, EXIF-rotated, resized so its longest edge equals
+    ``size`` (or short edge 224 when ``size == 224``), centre-cropped to a
+    network-friendly multiple of 16, and normalized to ``[-1, 1]``.
+
+    Parameters
+    ----------
+    folder_or_list
+        Either a directory path or a list of image file paths. Supported
+        extensions: ``.jpg``, ``.jpeg``, ``.png``; ``.heic``/``.heif`` if
+        ``pillow-heif`` is installed.
+    size
+        Target long-edge size in pixels. Use ``size=224`` for the legacy
+        short-edge crop behaviour.
+    square_ok
+        If ``False`` (default), strictly square inputs are cropped to a 4:3
+        aspect ratio before normalization.
+    verbose
+        If ``True``, print per-image loading progress.
+
+    Returns
+    -------
+    list[dict]
+        One dict per image with keys ``img``, ``true_shape``, ``idx``,
+        ``instance``, and ``view_label``, ready to be consumed by
+        :func:`nova3r.make_pairs`.
     """
     if isinstance(folder_or_list, str):
         if verbose:

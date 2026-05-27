@@ -24,9 +24,8 @@ class Nova3rImgCond(nn.Module, PyTorchModelHubMixin):
     backbone encoder and flow matching decoder.
     """
 
-    def __init__(self, img_size=518, patch_size=14, embed_dim=1024, patch_3d_size=256, num_3d_tokens=512, cfg=None, classifier_free_guidance_drop_pro=0.0):
-        """3D Shape Tokenization Implementation
-        """
+    def __init__(self, img_size=518, patch_size=14, embed_dim=1024, patch_3d_size=256, num_3d_tokens=512, cfg=None, classifier_free_guidance_drop_pro=0.0) -> None:
+        """Build the image-conditioned NOVA3R model from a Hydra ``cfg`` node."""
         super().__init__()
         self.cfg = cfg
 
@@ -308,21 +307,30 @@ class Nova3rImgCond(nn.Module, PyTorchModelHubMixin):
     def forward(
         self,
         images: torch.Tensor,
-        token_mask: torch.Tensor = None,
-        query_points: torch.Tensor = None,
-        timestep: torch.Tensor = None,
+        token_mask: Optional[torch.Tensor] = None,
+        query_points: Optional[torch.Tensor] = None,
+        timestep: Optional[torch.Tensor] = None,
+        **kwargs,
+    ) -> Dict[str, torch.Tensor]:
+        """Encode the input images and decode to a 3D point cloud.
+
+        Parameters
+        ----------
+        images
+            Input images with shape ``(B, S, C, H, W)``.
+        token_mask
+            Optional binary mask over scene tokens.
+        query_points
+            Optional query points consumed by the flow-matching decoder.
+        timestep
+            Optional flow-matching timestep tensor.
         **kwargs
-    ):
-        """Full forward pass: encode images, then decode to 3D point clouds.
+            Forwarded to the decoder; accepted for solver compatibility.
 
-        Args:
-            images (torch.Tensor): Input images with shape [B, S, C, H, W].
-            token_mask (torch.Tensor, optional): Mask for tokens. Default: None.
-            query_points (torch.Tensor, optional): Query points for decoding.
-            timestep (torch.Tensor, optional): Timestep for flow matching.
-
-        Returns:
-            dict: Predictions including 'pts3d_xyz', 'images', and 'S'.
+        Returns
+        -------
+        dict
+            Predictions including ``'pts3d_xyz'``, ``'images'``, and ``'S'``.
         """
         encode_data = self._encode(images)
 

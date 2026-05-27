@@ -34,6 +34,7 @@ def resolve_device(device=None) -> torch.device:
 
 
 def _device_type(device) -> str:
+    """Return the ``.type`` string (``'cuda'``/``'mps'``/``'cpu'``) of ``device``."""
     if device is None:
         return get_default_device().type
     if isinstance(device, torch.Tensor):
@@ -67,12 +68,13 @@ def autocast(device=None, dtype=None, enabled: bool = True):
 
 
 def todevice(batch, device, callback=None, non_blocking=False):
-    ''' Transfer some variables to another device (i.e. GPU, CPU:torch, CPU:numpy).
+    """Recursively transfer a nested batch to another device.
 
-    batch: list, tuple, dict of tensors or other things
-    device: pytorch device or 'numpy'
-    callback: function that would be called on every sub-elements.
-    '''
+    Walks dicts, tuples, and lists; for leaf tensors and numpy arrays performs
+    the appropriate conversion. ``device`` may be a ``torch.device``, a device
+    string, or the special value ``'numpy'`` to convert tensors to NumPy arrays.
+    ``callback`` is applied to ``batch`` before recursion.
+    """
     if callback:
         batch = callback(batch)
 
@@ -97,12 +99,29 @@ def todevice(batch, device, callback=None, non_blocking=False):
 to_device = todevice  # alias
 
 
-def to_numpy(x): return todevice(x, 'numpy')
-def to_cpu(x): return todevice(x, 'cpu')
-def to_cuda(x): return todevice(x, 'cuda')
+def to_numpy(x):
+    """Recursively convert tensors in ``x`` to NumPy arrays (CPU) — see :func:`todevice`."""
+    return todevice(x, 'numpy')
+
+
+def to_cpu(x):
+    """Recursively move tensors in ``x`` to CPU — see :func:`todevice`."""
+    return todevice(x, 'cpu')
+
+
+def to_cuda(x):
+    """Recursively move tensors in ``x`` to CUDA — see :func:`todevice`."""
+    return todevice(x, 'cuda')
 
 
 def collate_with_cat(whatever, lists=False):
+    """Recursively concatenate a list of nested batches.
+
+    Walks dicts, tuples, and lists; concatenates leaf tensors / arrays with
+    ``torch.cat``. When ``lists=True``, leaf tensors are returned as flat
+    Python lists instead of being concatenated — used when batched shapes
+    differ across samples.
+    """
     if isinstance(whatever, dict):
         return {k: collate_with_cat(vals, lists=lists) for k, vals in whatever.items()}
 
@@ -131,4 +150,5 @@ def collate_with_cat(whatever, lists=False):
 
 
 def listify(elems):
+    """Flatten an iterable of iterables into a single list."""
     return [x for e in elems for x in e]

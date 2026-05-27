@@ -4,20 +4,28 @@ from torch import nn
 
 
 class BatchModelWrapper(nn.Module):
-    """Wraps a Nova3r model for use with the ODE solver.
+    """Wrap a NOVA3R model for use with the flow-matching ODE solver.
 
-    Calls model._encode() separately, then feeds encoder_data into _decode()
-    at each ODE step.
+    Calls the underlying model's ``_encode`` once up front; at each ODE step
+    only ``_decode`` is invoked, with the cached ``encoder_data`` and the
+    integrator's current state ``x`` and timestep ``t``.
     """
 
-    def __init__(self, model: nn.Module):
+    def __init__(self, model: nn.Module) -> None:
         super().__init__()
         self.model = model
         # Unwrap DDP once rather than checking hasattr on every ODE step
         self._model = model.module if hasattr(model, 'module') else model
 
     @torch.no_grad()
-    def forward(self, x, t, images, encoder_data=None, **extras):
+    def forward(self, x, t, images, encoder_data=None, **extras) -> torch.Tensor:
+        """Decode one ODE step.
+
+        ``x`` is the current state (query points), ``t`` the scalar or
+        per-sample timestep, ``images`` the input views, and ``encoder_data``
+        the cached output of ``model._encode`` (required). Extra keyword
+        arguments are accepted and ignored for ODE-solver compatibility.
+        """
         if len(t.shape) == 0:
             B = x.shape[0]
             t = t.reshape(-1, 1).expand(B, x.shape[1])

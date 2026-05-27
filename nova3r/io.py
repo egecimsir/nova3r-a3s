@@ -1,14 +1,15 @@
 # Copyright (c) 2026 Weirong Chen
-"""Public I/O helpers: image preprocessing, checkpoint loading, PLY export, and a
-high-level ``predict`` convenience function.
+"""Public I/O helpers for NOVA3R.
 
-These helpers wrap the model + ``inference_nova3r`` pipeline so the package can
-be used as a drop-in module without the original demo scripts.
+This module exposes the user-facing entry points re-exported at the package
+root: image preprocessing, pairwise view-graph construction, checkpoint
+loading, PLY export, and the high-level :func:`predict` convenience function
+that wraps the full ``inference_nova3r`` pipeline.
 """
 from __future__ import annotations
 
 import os
-from typing import Iterable, Optional, Sequence, Tuple
+from typing import Optional, Sequence, Tuple, Union
 
 import numpy as np
 import PIL.Image
@@ -37,8 +38,27 @@ _MODEL_REGISTRY = {
 }
 
 
-def save_pointcloud_ply(pts3d, path: str) -> str:
-    """Save an (N, 3) point set to a PLY file. Lazily imports ``open3d``."""
+def save_pointcloud_ply(
+    pts3d: Union[np.ndarray, torch.Tensor],
+    path: str,
+) -> str:
+    """Save an ``(N, 3)`` point set to a PLY file.
+
+    Lazily imports ``open3d``; the ``[io]`` extra installs it.
+
+    Parameters
+    ----------
+    pts3d
+        Point cloud as a NumPy array or torch tensor of shape ``(N, 3)``
+        (or any shape that reshapes to ``(-1, 3)``).
+    path
+        Destination PLY file path. Parent directories are created if missing.
+
+    Returns
+    -------
+    str
+        The ``path`` argument, for convenience.
+    """
     try:
         import open3d as o3d
     except ImportError as e:
@@ -58,16 +78,33 @@ def save_pointcloud_ply(pts3d, path: str) -> str:
 
 
 def load_model(ckpt_path: str, device=None):
-    """Load a NOVA3R checkpoint and its sidecar Hydra config.
+    """Load a NOVA3R checkpoint together with its Hydra sidecar config.
 
-    Expects ``<ckpt_dir>/.hydra/config.yaml`` next to the checkpoint
-    (matches the layout produced by upstream training and the official
-    ``download_checkpoints.sh`` script).
+    Expects ``<ckpt_dir>/.hydra/config.yaml`` next to the checkpoint, matching
+    the layout produced by upstream training and the ``nova3r-download`` CLI.
 
-    ``device`` may be ``None`` (auto-pick: cuda > mps > cpu), a string, a
-    ``torch.device``, or a tensor.
+    Parameters
+    ----------
+    ckpt_path
+        Path to a ``.pth`` checkpoint file.
+    device
+        Target device; ``None`` (default) auto-selects via
+        :func:`nova3r.utils.device.resolve_device`. May also be a string,
+        ``torch.device``, or tensor.
 
-    Returns ``(model, cfg)``.
+    Returns
+    -------
+    tuple
+        ``(model, cfg)`` where ``model`` is a loaded ``nn.Module`` in eval-ready
+        state and ``cfg`` is the OmegaConf ``experiment`` node parsed from the
+        Hydra sidecar.
+
+    Raises
+    ------
+    FileNotFoundError
+        If the ``.hydra/config.yaml`` sidecar is missing.
+    KeyError
+        If the checkpoint references a model class not in ``_MODEL_REGISTRY``.
     """
     try:
         from omegaconf import OmegaConf
@@ -107,7 +144,7 @@ def load_model(ckpt_path: str, device=None):
 
 
 def _apply_inference_defaults(cfg):
-    """Set Hydra defaults expected by ``inference_nova3r`` if missing."""
+    """Populate Hydra defaults expected by :func:`inference_nova3r` if missing."""
     try:
         from omegaconf import OmegaConf
     except ImportError as e:
@@ -129,22 +166,41 @@ def predict(
     num_queries: int = 20000,
     output_path: Optional[str] = None,
 ) -> np.ndarray:
-    """End-to-end inference: image paths in, ``(N, 3)`` point cloud out.
+    """Run end-to-end inference from image paths to a point cloud.
+
+    Loads ``ckpt_path``, preprocesses the input images, runs
+    :func:`nova3r.inference.inference_nova3r`, and returns the predicted point
+    cloud as a NumPy array. Optionally writes the result to a PLY file.
 
     Parameters
     ----------
     ckpt_path
-        Path to model checkpoint (e.g. ``checkpoints/scene_n1/checkpoint-last.pth``).
+        Path to a ``.pth`` checkpoint (e.g.
+        ``checkpoints/scene_n1/checkpoint-last.pth``).
     image_paths
-        1 or 2 image paths.
+        One or two image paths. A single path is duplicated and the pair graph
+        is symmetrized to emulate the single-view setting.
     device
-        Torch device string.
+        Target device; ``None`` auto-selects (CUDA > MPS > CPU). May also be a
+        string, ``torch.device``, or tensor.
     resolution
-        ``(width, height)`` to resize inputs to.
+        ``(width, height)`` to which inputs are resized. The released
+        checkpoints expect ``(518, 392)``.
     num_queries
-        Number of query points for the flow-matching decoder.
+        Number of query points sampled by the flow-matching decoder.
     output_path
-        Optional ``.ply`` path. If given, also writes the point cloud to disk.
+        Optional path to a ``.ply`` file. When provided, the result is also
+        written to disk; requires the ``[io]`` extra.
+
+    Returns
+    -------
+    numpy.ndarray
+        Predicted point cloud with shape ``(num_queries, 3)``.
+
+    Raises
+    ------
+    ValueError
+        If ``image_paths`` does not contain one or two paths.
     """
     if not (1 <= len(image_paths) <= 2):
         raise ValueError("predict expects 1 or 2 image paths")

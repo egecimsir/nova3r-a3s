@@ -412,7 +412,43 @@ def loss_of_one_batch_demo(args, batch, model, criterion, device, use_amp=False,
 
 @torch.no_grad()
 def inference_nova3r(args, pairs, model, device, batch_size=8, verbose=True, num_queries=20000, n_views=2, method='euler', pointmaps=None):
-    """Run batched Nova3r inference on image pairs, returning predicted 3D point clouds."""
+    """Run batched NOVA3R inference over a list of image pairs.
+
+    Iterates over ``pairs`` in chunks of ``batch_size``, runs the model under
+    :func:`torch.no_grad`, and concatenates the per-batch outputs.
+
+    Parameters
+    ----------
+    args
+        OmegaConf experiment config (typically the ``cfg`` returned by
+        :func:`nova3r.load_model`).
+    pairs
+        List of ``(view1, view2)`` dicts produced by
+        :func:`nova3r.make_pairs`.
+    model
+        Loaded NOVA3R model (``Nova3rImgCond`` or ``Nova3rPtsCond``).
+    device
+        Torch device on which to run inference.
+    batch_size
+        Number of pairs per forward pass. Forced to ``1`` when input images
+        have heterogeneous shapes.
+    verbose
+        If ``True``, print progress information.
+    num_queries
+        Number of query points for the flow-matching decoder.
+    n_views
+        Number of input views per sample (1 or 2).
+    method
+        Flow-matching ODE integrator (e.g. ``'euler'``).
+    pointmaps
+        Optional precomputed point maps (used by ``Nova3rPtsCond``).
+
+    Returns
+    -------
+    dict
+        A dict with the collated views and predictions. The point cloud is at
+        ``result['pred']['pts3d_xyz']`` (shape ``(B, num_queries, 3)``, on CPU).
+    """
     if verbose:
         print(f'>> Inference with model on {len(pairs)} image pairs')
     result = []
@@ -431,7 +467,8 @@ def inference_nova3r(args, pairs, model, device, batch_size=8, verbose=True, num
     return result
 
 
-def check_if_same_size(pairs):
+def check_if_same_size(pairs) -> bool:
+    """Return ``True`` iff every pair shares the same per-view image shape."""
     shapes1 = [img1['img'].shape[-2:] for img1, img2 in pairs]
     shapes2 = [img2['img'].shape[-2:] for img1, img2 in pairs]
     return all(shapes1[0] == s for s in shapes1) and all(shapes2[0] == s for s in shapes2)
