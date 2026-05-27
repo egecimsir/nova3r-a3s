@@ -2,13 +2,14 @@
 
 > **This codebase is part of the [Amodal3DSeg (A3S)](https://github.com/egecimsir/nova3r-a3s) project.** 
 
----
-
 A minimal, self-contained Python package derived from [NOVA3R](https://github.com/wrchen530/nova3r), providing the model architecture, inference pipeline, and associated utilities. Demo scripts, evaluation pipelines, benchmark datasets, and the Gradio UI are not included.
+
+---
 
 > *Disclaimer: Refactoring was performed with the assistance of Claude Opus 4.7 (Anthropic). The underlying model code and algorithms are derived from the upstream repository.*
 
 ---
+## NOVA3R
 
 > **NOVA3R: Non-pixel-aligned Visual Transformer for Amodal 3D Reconstruction** — Chen, Zheng, Zhang, Vedaldi, Cremers. ICLR 2026.
 > [[Paper]](https://arxiv.org/abs/2603.04179) · [[Project page]](https://wrchen530.github.io/nova3r/) · [[Upstream repo]](https://github.com/wrchen530/nova3r)
