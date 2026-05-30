@@ -1,0 +1,2 @@
+[console_scripts]
+nova3r-download = nova3r.scripts.download_checkpoints:main

@@ -1,2 +1,5 @@
+.venv
+demo.ipynb
+**/__pycache__/
 checkpoints/scene_ae/checkpoint-last.pth
 checkpoints/*/.hydra/
