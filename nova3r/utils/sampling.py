@@ -1,12 +1,7 @@
 # Copyright (c) 2026 Weirong Chen
-import numpy as np
 import torch
 
-from torch_cluster import fps, knn
-from pytorch3d import _C
 from typing import List, Optional, Tuple, Union
-from pytorch3d.ops.utils import masked_gather
-from random import randint
 
 def sample_farthest_points(
     points: torch.Tensor,
@@ -47,6 +42,15 @@ def sample_farthest_points(
     """
     N, P, D = points.shape
     device = points.device
+
+    try:
+        from pytorch3d import _C
+        from pytorch3d.ops.utils import masked_gather
+    except ImportError as e:
+        raise ImportError(
+            "sample_farthest_points requires pytorch3d. "
+            "Install the [sampling] extra: pip install -e '.[sampling]'"
+        ) from e
 
     # Validate inputs
     if lengths is None:
@@ -271,8 +275,14 @@ def sharp_edge_fast_train_gen_target(pts3d_trg, valid_trg, batch_size=8192, over
         results_pts3d: (B, batch_size, 3) sampled points
         results_valid: (B, batch_size) sampled valid mask
     """
-    from torch_cluster import knn
-    
+    try:
+        from torch_cluster import knn
+    except ImportError as e:
+        raise ImportError(
+            "sharp_edge_fast_train_gen_target requires torch_cluster. "
+            "Install the matching wheel from https://data.pyg.org/whl/"
+        ) from e
+
     B, N, _ = pts3d_trg.shape
     device = pts3d_trg.device
     
@@ -348,7 +358,7 @@ def sharp_edge_fast_train_gen_target(pts3d_trg, valid_trg, batch_size=8192, over
             cov = torch.bmm(centered.transpose(-1, -2), centered)  # (N_reduced, 3, 3)
             
             # Compute eigenvalues and eigenvectors
-            eigenvals, eigenvecs = torch.linalg.eigh(cov)
+            _, eigenvecs = torch.linalg.eigh(cov)
             normals = eigenvecs[:, :, 0]  # smallest eigenvalue corresponds to normal
             
             # Compute sharpness measure using the same neighbor indices
