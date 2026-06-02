@@ -15,14 +15,10 @@ from nova3r.utils.misc import invalid_to_zeros
 from nova3r.utils.geometry import geotrf, inv
 
 # flow_matching
-from nova3r.flow_matching.path.scheduler import CosineScheduler
-from nova3r.flow_matching.path import AffineProbPath
 from nova3r.flow_matching.solver import ODESolver
 from nova3r.models.model_wrapper import BatchModelWrapper
 from nova3r.utils.sampling import sampling_train_gen_target
 from einops import rearrange
-
-path = AffineProbPath(scheduler=CosineScheduler())
 
 amp_dtype_mapping = {
     "fp16": torch.float16, 
@@ -326,8 +322,11 @@ def loss_of_one_batch_lari(args, batch, model, criterion, device, use_amp=False,
     pred_dict['input_pts3d'] = pts3d_src
     pred_dict['input_valid'] = valid_src
 
-    with autocast(device, dtype=amp_dtype_mapping[args.amp_dtype], enabled=bool(use_amp)):
-        pts3d_data, loss = criterion(batch, pred_dict) if criterion is not None else None
+    if criterion is not None:
+        with autocast(device, dtype=amp_dtype_mapping[args.amp_dtype], enabled=bool(use_amp)):
+            pts3d_data, loss = criterion(batch, pred_dict)
+    else:
+        pts3d_data, loss = None, None
 
     result = dict(view=batch, pred=pred_dict, data=pts3d_data, loss=loss)
     return result[ret] if ret else result

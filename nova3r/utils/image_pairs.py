@@ -42,7 +42,7 @@ def make_pairs(imgs, scene_graph='complete', prefilter=None, symmetrize=True):
         iscyclic = not scene_graph.endswith('noncyclic')
         try:
             winsize = int(scene_graph.split('-')[1])
-        except Exception as e:
+        except (ValueError, IndexError):
             winsize = 3
         pairsid = set()
         for i in range(len(imgs)):
@@ -59,7 +59,7 @@ def make_pairs(imgs, scene_graph='complete', prefilter=None, symmetrize=True):
         iscyclic = not scene_graph.endswith('noncyclic')
         try:
             winsize = int(scene_graph.split('-')[1])
-        except Exception as e:
+        except (ValueError, IndexError):
             winsize = 3
         offsets = [2**i for i in range(winsize)]
         pairsid = set()

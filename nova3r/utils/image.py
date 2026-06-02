@@ -149,7 +149,8 @@ def load_images(folder_or_list, size, square_ok=False, verbose=True):
         imgs.append(dict(img=ImgNorm(img)[None], true_shape=np.int32(
             [img.size[::-1]]), idx=len(imgs), instance=str(len(imgs)), view_label=f'input_{len(imgs)}'))
 
-    assert imgs, 'no images foud at '+root
+    if not imgs:
+        raise FileNotFoundError(f'no images found at {root!r}')
     if verbose:
         print(f' (Found {len(imgs)} images)')
     return imgs

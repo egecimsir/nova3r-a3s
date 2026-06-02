@@ -140,6 +140,7 @@ def load_model(ckpt_path: str, device=None):
     model.load_state_dict(state, strict=True)
 
     del ckpt
+    cfg = _apply_inference_defaults(cfg)
     return model, cfg
 
 
@@ -207,7 +208,6 @@ def predict(
 
     device = resolve_device(device)
     model, cfg = load_model(ckpt_path, device)
-    cfg = _apply_inference_defaults(cfg)
 
     target_W, target_H = resolution
     img_norm = transforms.Compose([
