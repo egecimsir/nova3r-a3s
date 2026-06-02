@@ -26,7 +26,6 @@ dependencies = [
     "flow-matching",
     "torchdiffeq",
     "huggingface-hub>=0.22",
-    "torch-cluster",
 ]
 
 [project.optional-dependencies]
@@ -35,6 +34,11 @@ io = ["open3d"]
 # Required only for FPS / k-NN sampling code paths in nova3r.utils.sampling.
 # pytorch3d wheels are not on PyPI for all platforms — install from source if needed.
 sampling = ["pytorch3d"]
+# torch-cluster ships only as a CUDA/torch-ABI-matched wheel via the PyG index.
+# Listed as an extra so `pip install nova3r` succeeds on macOS / CPU hosts;
+# install with: pip install torch-cluster -f https://data.pyg.org/whl/torch-<ver>+<cuda>.html
+cuda = ["torch-cluster"]
+all = ["nova3r[io,sampling,cuda]"]
 
 [project.scripts]
 nova3r-download = "nova3r.scripts.download_checkpoints:main"
