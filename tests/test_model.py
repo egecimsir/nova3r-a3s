@@ -5,7 +5,7 @@ Coverage:
 * standalone construction (no upstream wrapper required)
 * ``preprocess`` output contract + bit-exact match vs upstream inline preprocessing
 * ``encode`` / ``forward`` parity vs ``Nova3rImgCond`` for ``scene_n1`` and ``scene_n2``
-* end-to-end ``predict`` parity vs ``nova3r.io.predict`` (slow)
+* end-to-end ``predict`` parity vs ``nova3r._legacy.io.predict`` (slow)
 
 Runtime is kept low by caching each checkpoint load once per session
 (see ``tests/conftest.py``) and reusing the cached models in the e2e test
@@ -19,10 +19,10 @@ import pytest
 import torch
 import torchvision.transforms as transforms
 
-import nova3r.io
+import nova3r._legacy.io
 from nova3r import Nova3r, predict, preprocess
 from nova3r.model import IMG_NORM, NUM_3D_TOKENS, TOKEN_DIM
-from nova3r.io import predict as base_predict
+from nova3r._legacy.io import predict as base_predict
 
 
 N_QUERY = 1024
@@ -97,9 +97,9 @@ def test_preprocess_output_contract(image_path):
 
 
 def test_preprocess_matches_upstream_inline(image_path):
-    """``preprocess`` is bit-exact with the inline preprocessing in ``nova3r.io.predict``."""
+    """``preprocess`` is bit-exact with the inline preprocessing in ``nova3r._legacy.io.predict``."""
     W, H = RESOLUTION
-    # Replicate exactly what upstream `nova3r.io.predict` does inline.
+    # Replicate exactly what upstream `nova3r._legacy.io.predict` does inline.
     upstream_norm = transforms.Compose([
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5]),
@@ -171,12 +171,12 @@ def test_predict_matches_upstream(
     n1_ckpt, image_path, n1_ours_model, n1_base_loaded,
     seed_torch_rand_xyz, monkeypatch,
 ):
-    """End-to-end ``predict`` matches ``nova3r.io.predict`` bit-exactly.
+    """End-to-end ``predict`` matches ``nova3r._legacy.io.predict`` bit-exactly.
 
     Patches upstream ``load_model`` to return the cached n1 ``(model, cfg)``
     so this slow test doesn't trigger an extra full checkpoint load.
     """
-    monkeypatch.setattr(nova3r.io, "load_model", lambda *a, **k: n1_base_loaded)
+    monkeypatch.setattr(nova3r._legacy.io, "load_model", lambda *a, **k: n1_base_loaded)
 
     with seed_torch_rand_xyz():
         out_ours = predict(n1_ours_model, [image_path])

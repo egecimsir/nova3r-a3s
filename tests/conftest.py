@@ -13,7 +13,7 @@ import pytest
 import torch
 
 from nova3r import Nova3r
-from nova3r.io import load_model
+from nova3r._legacy.io import load_model
 
 SEED = 0
 _REPO_ROOT = Path(__file__).resolve().parents[3]
