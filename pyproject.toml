@@ -51,3 +51,11 @@ Repository = "https://github.com/wrchen530/nova3r"
 [tool.setuptools.packages.find]
 include = ["nova3r*"]
 exclude = ["tests*"]
+
+[tool.pyright]
+pythonVersion = "3.10"
+exclude = ["**/__pycache__", "**/*.egg-info"]
+reportMissingImports = "warning"
+# Pillow >=10 compat alias not in stubs; torchvision T.Compose output typed as Any.
+reportAttributeAccessIssue = "none"
+reportIndexIssue = "none"
