@@ -17,7 +17,7 @@ import torch
 import torchvision.transforms as transforms
 
 from nova3r.inference import inference_nova3r
-from nova3r.models import Nova3rImgCond, Nova3rPtsCond
+from nova3r.modules import Nova3rImgCond, Nova3rPtsCond
 from nova3r.utils.device import get_default_device, resolve_device
 from nova3r.utils.image import load_images
 from nova3r.utils.image_pairs import make_pairs

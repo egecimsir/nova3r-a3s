@@ -16,7 +16,7 @@ from nova3r.utils.geometry import geotrf, inv
 
 # flow_matching
 from nova3r.flow_matching.solver import ODESolver
-from nova3r.models.model_wrapper import BatchModelWrapper
+from nova3r.modules.model_wrapper import BatchModelWrapper
 from nova3r.utils.sampling import sampling_train_gen_target
 from einops import rearrange
 
