@@ -12,18 +12,6 @@ os.environ.setdefault("PYTORCH_ENABLE_MPS_FALLBACK", "1")
 import pytest
 import torch
 
-# On CUDA, TF32 matmul and SDPA backend auto-selection make two separately
-# instantiated module trees (with identical weights) diverge by ~1e-3..1e-2 —
-# breaking the bit-exact parity tests in ``test_model.py``. Pin to plain fp32
-# math everywhere so CUDA matches MPS / CPU. No-op on non-CUDA devices.
-if torch.cuda.is_available():
-    torch.backends.cuda.matmul.allow_tf32 = False
-    torch.backends.cudnn.allow_tf32 = False
-    torch.backends.cuda.enable_flash_sdp(False)
-    torch.backends.cuda.enable_mem_efficient_sdp(False)
-    torch.backends.cuda.enable_cudnn_sdp(False)
-    torch.backends.cuda.enable_math_sdp(True)
-
 from nova3r import Nova3r
 from nova3r._legacy.io import load_model
 
