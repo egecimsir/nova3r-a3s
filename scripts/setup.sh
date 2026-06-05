@@ -157,9 +157,14 @@ if [ $IS_CUDA -eq 1 ]; then
     python -c "import nova3r; print('nova3r OK, device =', nova3r.get_default_device())" \
         || { err "nova3r import failed"; exit 1; }
 else
-    # On non-CUDA hosts, model classes that top-level-import torch_cluster
-    # will fail; only assert that the package itself imports.
-    python -c "import nova3r.io, nova3r.utils.device as d; print('nova3r OK, device =', d.get_default_device())" \
+    # On non-CUDA hosts without torch-cluster, `import nova3r` (and even
+    # `import nova3r.io`) fails because nova3r.modules eagerly imports the
+    # legacy Nova3rImgCond / Nova3rPtsCond classes, which top-level-import
+    # `from torch_cluster import fps`. Probe only the device helper here so
+    # standalone runs don't false-fail; the workspace setup.sh installs the
+    # torch-cluster sdist before delegating, in which case `import nova3r`
+    # also works.
+    python -c "import nova3r.utils.device as d; print('nova3r device =', d.get_default_device())" \
         || { err "nova3r import failed"; exit 1; }
 fi
 
@@ -168,6 +173,8 @@ ok "nova3r-a3s setup complete."
 if [ $IS_CUDA -ne 1 ]; then
     log ""
     warn "Non-CUDA host: torch-cluster has no MPS/CPU wheel."
-    warn "Top-level imports of Nova3rImgCond / Nova3rPtsCond / TripoSG AE will fail."
-    warn "Use lower-level building blocks, or run on a CUDA host for full inference."
+    warn "\`import nova3r\` (and the new Nova3r model) requires torch-cluster because"
+    warn "nova3r.modules eagerly imports legacy Nova3rImgCond / Nova3rPtsCond."
+    warn "Install torch-cluster from sdist (needs a C++ toolchain) or run on CUDA"
+    warn "for the full inference surface."
 fi

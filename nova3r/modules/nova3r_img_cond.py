@@ -6,7 +6,7 @@ import torch
 import torch.nn as nn
 from huggingface_hub import PyTorchModelHubMixin  # used for model hub
 
-from nova3r.models.aggregator_pts3d import AggregatorPts3D
+from nova3r.modules.aggregator_pts3d import AggregatorPts3D
 from nova3r.heads.pts3d_decoder import *
 from nova3r.heads.triposg_model.autoencoder_kl_triposg import FrequencyPositionalEmbedding
 from nova3r.layers.hunyuan_block import FourierEmbedder

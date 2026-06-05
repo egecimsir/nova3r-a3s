@@ -1,32 +1,49 @@
 # Copyright (c) 2026 Weirong Chen
 # Copyright (C) 2024-present Naver Corporation. All rights reserved.
 # Licensed under CC BY-NC-SA 4.0 (non-commercial use only).
-#
-# --------------------------------------------------------
-# utilities needed for the inference
-# --------------------------------------------------------
+"""Nova3r-compatible inference utilities.
 
-import tqdm
+Contains the data utilities that are model-agnostic (``get_all_pts3d``,
+``get_complete_pts3d``, ``normalize_input``, ``check_if_same_size``,
+``amp_dtype_mapping``) plus an adapted :func:`inference_nova3r` runner that
+takes a :class:`nova3r.Nova3r` instance directly (no Hydra ``args``, no
+``BatchModelWrapper``, no ``model._encode``).
+
+The legacy ``inference_nova3r`` runner (and the ``loss_of_one_batch_*``
+helpers) live in :mod:`nova3r._legacy.inference`.
+"""
+from __future__ import annotations
+
+from typing import Sequence
+
 import torch
 import torch.nn.functional as F
-
-from nova3r.utils.device import to_cpu, collate_with_cat, autocast
-from nova3r.utils.misc import invalid_to_zeros
-from nova3r.utils.geometry import geotrf, inv
-
-# flow_matching
-from nova3r.flow_matching.solver import ODESolver
-from nova3r.models.model_wrapper import BatchModelWrapper
-from nova3r.utils.sampling import sampling_train_gen_target
+import tqdm
 from einops import rearrange
+from torch import Tensor
+
+from nova3r.flow_matching.solver import ODESolver
+from nova3r.model import Nova3r
+from nova3r.utils.device import autocast
+from nova3r.utils.geometry import geotrf, inv
+from nova3r.utils.misc import invalid_to_zeros
+from nova3r.utils.sampling import sampling_train_gen_target
+
+__all__ = [
+    "amp_dtype_mapping",
+    "get_all_pts3d",
+    "get_complete_pts3d",
+    "normalize_input",
+    "check_if_same_size",
+    "inference_nova3r",
+]
 
 amp_dtype_mapping = {
-    "fp16": torch.float16, 
-    "bf16": torch.bfloat16, 
-    "fp32": torch.float32, 
-    'tf32': torch.float32
+    "fp16": torch.float16,
+    "bf16": torch.bfloat16,
+    "fp32": torch.float32,
+    'tf32': torch.float32,
 }
-
 
 
 def get_all_pts3d(gt_list, mode=None, down_resolution=112):
@@ -44,13 +61,11 @@ def get_all_pts3d(gt_list, mode=None, down_resolution=112):
     elif 'src_complete_fps' in mode:
         batch_size = int(mode.split('_')[-1])
         gt_pts, valid = get_complete_pts3d(gt_list)
-        # run fps_fast
         gt_pts, valid = sampling_train_gen_target(gt_pts, valid, None, target_sampling='fps_fast', batch_size=batch_size)
 
     elif 'src_complete_fps_edge' in mode:
         batch_size = int(mode.split('_')[-1])
         gt_pts, valid = get_complete_pts3d(gt_list)
-        # run fps_fast
         gt_pts, valid = sampling_train_gen_target(gt_pts, valid, None, target_sampling='fps_edge_fast', batch_size=batch_size)
 
     elif mode == 'cube_global':
@@ -73,7 +88,7 @@ def get_all_pts3d(gt_list, mode=None, down_resolution=112):
 
         valid_list = [gt['valid_mask'].clone() for gt in gt_list]
         valid = torch.stack(valid_list, dim=1).float()
-        valid = rearrange(valid, 'b s h w -> (b s) 1 h w')  # Add channel dimension
+        valid = rearrange(valid, 'b s h w -> (b s) 1 h w')
         valid = F.interpolate(valid, size=down_resolution, mode='nearest')
         valid = rearrange(valid, '(b s) 1 h w -> b (s h w)', b=B).bool()
 
@@ -93,7 +108,7 @@ def get_all_pts3d(gt_list, mode=None, down_resolution=112):
 
         valid_list = [gt['valid_mask'].clone() for gt in gt_list]
         valid = torch.stack(valid_list, dim=1).float()
-        valid = rearrange(valid, 'b s h w -> (b s) 1 h w')  # Add channel dimension
+        valid = rearrange(valid, 'b s h w -> (b s) 1 h w')
         valid = F.interpolate(valid, size=down_resolution, mode='nearest')
         valid = rearrange(valid, '(b s) 1 h w -> b (s h w)', b=B).bool()
 
@@ -146,8 +161,7 @@ def get_complete_pts3d(gt_list, valid_front=False):
 
 
 def normalize_input(pts3d_src, valid_src, pts3d_trg, valid_trg, mode='none'):
-    """Normalize the input points
-    """
+    """Normalize the input points."""
     if mode == 'none':
         return pts3d_src, pts3d_trg
 
@@ -225,247 +239,6 @@ def normalize_input(pts3d_src, valid_src, pts3d_trg, valid_trg, mode='none'):
         return pts3d_src, pts3d_trg
 
 
-def loss_of_one_batch_lari(args, batch, model, criterion, device, use_amp=False, ret=None, num_queries=20000, model_wrapper=None, **kwargs):
-    """Compute evaluation metrics (Chamfer Distance, F-Score) for trained models."""
-    ignore_keys = set(['dataset', 'label', 'instance', 'idx', 'true_shape', 'rng', 'view_label'])
-
-    for view in batch:
-        for name in view.keys():  # pseudo_focal
-            if name in ignore_keys:
-                continue
-            view[name] = view[name].to(device, non_blocking=True)
-
-    token_mask = None
-
-    img_src_list = []
-    for view in batch:
-        if 'input' in view['view_label'][0]:
-            view['img'] = view['img'] * 0.5 + 0.5
-            img = view['img']
-            img_src_list.append(img)
-
-    images = torch.stack(img_src_list, dim=1)
-
-    # prepare the diffusion data
-    if 'query_source' in args.model.params.cfg.pts3d_head.params:
-        query_src = args.model.params.cfg.pts3d_head.params.query_source
-    else:
-        query_src = 'src_complete'
-
-    if 'down_resolution' in args.model.params.cfg.pts3d_head.params:
-        down_resolution = args.model.params.cfg.pts3d_head.params.down_resolution
-    else:
-        down_resolution = 224
-
-    if 'norm_mode' in args.model.params.cfg.pts3d_head.params:
-        norm_mode = args.model.params.cfg.pts3d_head.params.norm_mode
-    else:
-        norm_mode = 'none'
-
-    if 'fm_sampling' in args:
-        fm_sampling = args.fm_sampling
-    else:
-        fm_sampling = 'euler'
-
-    pts3d_src, valid_src = get_all_pts3d(batch, mode=query_src, down_resolution=down_resolution)
-
-    pts3d_src_norm, _ = normalize_input(pts3d_src, valid_src, pts3d_src, valid_src, mode=norm_mode)
-
-
-    def process_point(args, images, pts3d_src, token_mask, num_queries, device, model_wrapper=None, method='euler'):
-        step_size = args.fm_step_size
-        num_steps = int(1 // args.fm_step_size)
-        point_size = num_queries
-
-        cfg_scale = args.cfg_scale if 'cfg_scale' in args else 1.0
-        B = images.shape[0]
-
-        T = torch.linspace(0, 1, num_steps).to(device)
-        if model_wrapper is not None:
-            wrapped_vf = model_wrapper
-        else:
-            wrapped_vf = BatchModelWrapper(model=model)
-        wrapped_vf.eval()
-
-        model.eval()
-        x_init = torch.rand((B, point_size, 3), dtype=torch.float32, device=device) * 2 - 1
-        solver = ODESolver(velocity_model=wrapped_vf)
-
-        if hasattr(model, 'module'):
-            encoder_data = model.module._encode(images=images, pointmaps=pts3d_src, test=True, cfg_scale=cfg_scale)
-        else:
-            encoder_data = model._encode(images=images, pointmaps=pts3d_src, test=True, cfg_scale=cfg_scale)
-
-        sol = solver.sample(
-            time_grid=T,
-            x_init=x_init.detach(),
-            method=method,
-            step_size=step_size,
-            return_intermediates=True,
-            images=images.detach(),
-            token_mask=token_mask,
-            encoder_data=encoder_data,
-            pointmaps=pts3d_src.detach()
-        )
-        return sol
-
-    with torch.no_grad():
-        with autocast(device, dtype=amp_dtype_mapping[args.amp_dtype]):
-            pts3d_xyz_list = process_point(args, images, pts3d_src_norm, token_mask, num_queries, device, model_wrapper=model_wrapper, method=fm_sampling)
-
-    pts3d_xyz = pts3d_xyz_list[-1] 
-    pred_dict = {}
-    pred_dict['pts3d_xyz'] = pts3d_xyz
-    pred_dict['pts3d_xyz_list'] = pts3d_xyz_list
-    pred_dict["images"] = images
-
-    pred_dict['input_pts3d'] = pts3d_src
-    pred_dict['input_valid'] = valid_src
-
-    if criterion is not None:
-        with autocast(device, dtype=amp_dtype_mapping[args.amp_dtype], enabled=bool(use_amp)):
-            pts3d_data, loss = criterion(batch, pred_dict)
-    else:
-        pts3d_data, loss = None, None
-
-    result = dict(view=batch, pred=pred_dict, data=pts3d_data, loss=loss)
-    return result[ret] if ret else result
-
-
-def loss_of_one_batch_demo(args, batch, model, criterion, device, use_amp=False, ret=None, num_queries=20000, model_wrapper=None, n_views=2, method='euler', pointmaps=None):
-    """Run inference for demo/visualization -- generates 3D point clouds from images."""
-    ignore_keys = set(['dataset', 'label', 'instance', 'idx', 'true_shape', 'rng', 'view_label'])
-
-    for view in batch:
-        for name in view.keys():  # pseudo_focal
-            if name in ignore_keys:
-                continue
-            view[name] = view[name].to(device, non_blocking=True)
-
-    token_mask = None
-
-    img_src_list = []
-    for view in batch:
-        if 'input' in view['view_label'][0]:
-            view['img'] = view['img'] * 0.5 + 0.5
-            img = view['img']
-            img_src_list.append(img)
-
-
-    images = torch.stack(img_src_list, dim=1)
-    images = images[:, :n_views, ...]  # Use only n_views
-
-    def process_point(args, images, pts3d_src, token_mask, num_queries, device, model_wrapper=None, method='euler'):
-        step_size = args.fm_step_size
-        num_steps = int(1 // args.fm_step_size)
-        point_size = num_queries
-
-        B = images.shape[0]
-
-        T = torch.linspace(0, 1, num_steps).to(device)
-        if model_wrapper is not None:
-            wrapped_vf = model_wrapper
-        else:
-            wrapped_vf = BatchModelWrapper(model=model)
-        wrapped_vf.eval()
-
-        model.eval()
-        x_init = torch.rand((B, point_size, 3), dtype=torch.float32, device=device) * 2 - 1
-        solver = ODESolver(velocity_model=wrapped_vf)
-
-        if hasattr(model, 'module'):
-            encoder_data = model.module._encode(images=images, pointmaps=pts3d_src)
-        else:
-            encoder_data = model._encode(images=images, pointmaps=pts3d_src)
-
-        sol = solver.sample(
-            time_grid=T,
-            x_init=x_init,
-            method=method,
-            step_size=step_size,
-            return_intermediates=False,
-            images=images,
-            token_mask=token_mask,
-            encoder_data=encoder_data,
-            pointmaps=pts3d_src
-        )
-        return sol[-1] if isinstance(sol, list) else sol
-
-    if pointmaps is not None:
-        norm_mode = args.model.params.cfg.pts3d_head.params.get('norm_mode', 'none')
-        valid = torch.ones(pointmaps.shape[0], pointmaps.shape[1], dtype=torch.bool, device=device)
-        pointmaps, _ = normalize_input(pointmaps, valid, pointmaps, valid, mode=norm_mode)
-
-    with torch.no_grad():
-        with autocast(device):
-            pts3d_xyz = process_point(args, images, pointmaps, token_mask, num_queries, device, model_wrapper=model_wrapper, method=method)
-
-    pred_dict = {}
-    pred_dict['pts3d_xyz'] = pts3d_xyz
-    pred_dict["images"] = images
-
-    result = dict(view=batch, pred=pred_dict)
-    return result[ret] if ret else result
-
-
-
-@torch.no_grad()
-def inference_nova3r(args, pairs, model, device, batch_size=8, verbose=True, num_queries=20000, n_views=2, method='euler', pointmaps=None):
-    """Run batched NOVA3R inference over a list of image pairs.
-
-    Iterates over ``pairs`` in chunks of ``batch_size``, runs the model under
-    :func:`torch.no_grad`, and concatenates the per-batch outputs.
-
-    Parameters
-    ----------
-    args
-        OmegaConf experiment config (typically the ``cfg`` returned by
-        :func:`nova3r.load_model`).
-    pairs
-        List of ``(view1, view2)`` dicts produced by
-        :func:`nova3r.make_pairs`.
-    model
-        Loaded NOVA3R model (``Nova3rImgCond`` or ``Nova3rPtsCond``).
-    device
-        Torch device on which to run inference.
-    batch_size
-        Number of pairs per forward pass. Forced to ``1`` when input images
-        have heterogeneous shapes.
-    verbose
-        If ``True``, print progress information.
-    num_queries
-        Number of query points for the flow-matching decoder.
-    n_views
-        Number of input views per sample (1 or 2).
-    method
-        Flow-matching ODE integrator (e.g. ``'euler'``).
-    pointmaps
-        Optional precomputed point maps (used by ``Nova3rPtsCond``).
-
-    Returns
-    -------
-    dict
-        A dict with the collated views and predictions. The point cloud is at
-        ``result['pred']['pts3d_xyz']`` (shape ``(B, num_queries, 3)``, on CPU).
-    """
-    if verbose:
-        print(f'>> Inference with model on {len(pairs)} image pairs')
-    result = []
-
-    # first, check if all images have the same size
-    multiple_shapes = not (check_if_same_size(pairs))
-    if multiple_shapes:  # force bs=1
-        batch_size = 1
-
-    for i in tqdm.trange(0, len(pairs), batch_size, disable=not verbose):
-        res = loss_of_one_batch_demo(args, collate_with_cat(pairs[i:i + batch_size]), model, None, device, num_queries=num_queries, n_views=n_views, method=method, pointmaps=pointmaps)
-        result.append(to_cpu(res))
-
-    result = collate_with_cat(result, lists=multiple_shapes)
-
-    return result
-
-
 def check_if_same_size(pairs) -> bool:
     """Return ``True`` iff every pair shares the same per-view image shape."""
     shapes1 = [img1['img'].shape[-2:] for img1, img2 in pairs]
@@ -473,3 +246,79 @@ def check_if_same_size(pairs) -> bool:
     return all(shapes1[0] == s for s in shapes1) and all(shapes2[0] == s for s in shapes2)
 
 
+@torch.no_grad()
+def inference_nova3r(
+    model: Nova3r,
+    pairs: Sequence[tuple[dict, dict]],
+    *,
+    num_queries: int = 20_000,
+    fm_step_size: float = 0.04,
+    seed: int | None = None,
+    verbose: bool = True,
+) -> dict:
+    """Batched Nova3r-compatible inference over a list of image pairs.
+
+    Takes a :class:`nova3r.Nova3r` instance and a list of pairs produced by
+    :func:`nova3r.make_pairs` over views from :func:`nova3r.preprocess` (each
+    view's ``img`` is ``(1, 3, H, W)`` in ``[-1, 1]``). Internally mirrors the
+    encode + flow-matching ODE sampling of :func:`nova3r.model.predict`.
+
+    Returns a dict shaped like the legacy runner::
+
+        {"view": pairs,
+         "pred": {"pts3d_xyz": Tensor[len(pairs), num_queries, 3]}}
+
+    with the point cloud tensor on CPU.
+    """
+    if verbose:
+        print(f">> Nova3r inference on {len(pairs)} image pairs")
+
+    device = next(model.parameters()).device
+    model.eval()
+    num_steps = int(1 // fm_step_size)
+    time_grid = torch.linspace(0, 1, num_steps, device=device)
+
+    per_pair: list[Tensor] = []
+    iterator = tqdm.tqdm(pairs, disable=not verbose, desc=">> Nova3r inference")
+    for pair in iterator:
+        # Each view's `img` is (1, 3, H, W) in [-1, 1] (from `preprocess`/IMG_NORM).
+        # Stack the views into (1, S, 3, H, W) and rescale to [0, 1] to match
+        # the convention `model.encode` expects (same as `nova3r.model.predict`).
+        imgs = torch.stack([v['img'].to(device) for v in pair], dim=1)
+        images = imgs * 0.5 + 0.5
+
+        with autocast(device):
+            encoder_data = model.encode(images=images, pointmaps=None)
+
+            def velocity_field(x: Tensor, t: Tensor, **_) -> Tensor:
+                if t.dim() == 0:
+                    t = t.expand(x.shape[0], x.shape[1])
+                return model.decode(
+                    tokens=encoder_data["tokens"],
+                    images=images,
+                    query_points=x,
+                    timestep=t,
+                )["pts3d_xyz"]
+
+            solver = ODESolver(velocity_model=velocity_field)
+            if seed is not None:
+                torch.manual_seed(seed)
+            x_init = torch.rand(
+                (images.shape[0], num_queries, 3),
+                dtype=torch.float32, device=device,
+            ) * 2 - 1
+            pts = solver.sample(
+                time_grid=time_grid,
+                x_init=x_init,
+                method="euler",
+                step_size=fm_step_size,
+                return_intermediates=False,
+            )
+
+        per_pair.append(pts.detach().cpu())
+
+    pts3d_xyz = torch.cat(per_pair, dim=0)
+    return {
+        "view": list(pairs),
+        "pred": {"pts3d_xyz": pts3d_xyz},
+    }
