@@ -38,10 +38,13 @@ sampling = ["pytorch3d"]
 # Listed as an extra so `pip install nova3r` succeeds on macOS / CPU hosts;
 # install with: pip install torch-cluster -f https://data.pyg.org/whl/torch-<ver>+<cuda>.html
 cuda = ["torch-cluster"]
-all = ["nova3r[io,sampling,cuda]"]
+# Point-cloud rendering stack (nova3r.render / nova3r-render CLI).
+render = ["pytorch3d", "open3d", "imageio", "matplotlib"]
+all = ["nova3r[io,sampling,cuda,render]"]
 
 [project.scripts]
 nova3r-download = "nova3r.scripts.download_checkpoints:main"
+nova3r-render = "nova3r.scripts.render:main"
 
 [project.urls]
 Homepage = "https://wrchen530.github.io/nova3r/"

@@ -14,6 +14,19 @@ from nova3r.io import (
     save_pointcloud_ply,
 )
 from nova3r.model import Nova3r, preprocess
+from nova3r.render import (
+    add_bbox,
+    align_obb,
+    align_pca,
+    center,
+    colorize,
+    flip_axis,
+    load_pointcloud,
+    place_on_floor,
+    render_turntable_frames,
+    save_video,
+    smooth_surface,
+)
 from nova3r.scripts.download_checkpoints import download_checkpoints
 from nova3r.utils.device import autocast, get_default_device, resolve_device
 
@@ -30,4 +43,16 @@ __all__ = [
     "resolve_device",
     "autocast",
     "download_checkpoints",
+    # render
+    "load_pointcloud",
+    "align_pca",
+    "align_obb",
+    "center",
+    "place_on_floor",
+    "flip_axis",
+    "smooth_surface",
+    "colorize",
+    "add_bbox",
+    "render_turntable_frames",
+    "save_video",
 ]
