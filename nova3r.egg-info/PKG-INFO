@@ -214,40 +214,41 @@ Requires-Dist: diffusers
 Requires-Dist: flow-matching
 Requires-Dist: torchdiffeq
 Requires-Dist: huggingface-hub>=0.22
-Requires-Dist: torch-cluster
 Provides-Extra: io
 Requires-Dist: open3d; extra == "io"
 Provides-Extra: sampling
 Requires-Dist: pytorch3d; extra == "sampling"
+Provides-Extra: cuda
+Requires-Dist: torch-cluster; extra == "cuda"
+Provides-Extra: render
+Requires-Dist: pytorch3d; extra == "render"
+Requires-Dist: open3d; extra == "render"
+Requires-Dist: imageio; extra == "render"
+Requires-Dist: matplotlib; extra == "render"
+Provides-Extra: all
+Requires-Dist: nova3r[cuda,io,render,sampling]; extra == "all"
 Dynamic: license-file
 
-# NOVA3R - Minimal Codebase
+# NOVA3R — Minimal Codebase
 
-> **This codebase is part of the [Amodal3DSeg (A3S)](https://github.com/egecimsir/nova3r-a3s) project.** 
+> Part of the [Amodal3DSeg (A3S)](https://github.com/egecimsir/nova3r-a3s) project. A self-contained Python package derived from [NOVA3R](https://github.com/wrchen530/nova3r), providing the model architecture, inference pipeline, and utilities. Demo scripts, evaluation pipelines, benchmark datasets, and the Gradio UI are not included.
 
-A minimal, self-contained Python package derived from [NOVA3R](https://github.com/wrchen530/nova3r), providing the model architecture, inference pipeline, and associated utilities. Demo scripts, evaluation pipelines, benchmark datasets, and the Gradio UI are not included.
-
----
-
-> *Disclaimer: Refactoring was performed with the assistance of Claude Opus 4.7 (Anthropic). The underlying model code and algorithms are derived from the upstream repository.*
+> *Refactoring assisted by Claude Opus 4.7 (Anthropic). Model code and algorithms are derived from the upstream repository.*
 
 ---
-## NOVA3R
+
+## About NOVA3R
 
 > **NOVA3R: Non-pixel-aligned Visual Transformer for Amodal 3D Reconstruction** — Chen, Zheng, Zhang, Vedaldi, Cremers. ICLR 2026.
 > [[Paper]](https://arxiv.org/abs/2603.04179) · [[Project page]](https://wrchen530.github.io/nova3r/) · [[Upstream repo]](https://github.com/wrchen530/nova3r)
 
-**Stage 1** — A flow-matching autoencoder learns latent scene tokens from complete point clouds.
-
-**Stage 2** — A multi-view image encoder maps images into the same latent space using learnable initial tokens, trained with frozen Stage 1 decoder weights.
+- **Stage 1** — flow-matching autoencoder learns latent scene tokens from complete point clouds.
+- **Stage 2** — multi-view image encoder maps images into the same latent space using learnable initial tokens, trained with frozen Stage 1 decoder weights.
 
 ![NOVA3R Pipeline](assets/nova3r_pipeline.jpg)
-
-**Different Decoder Architectures** - The independent decoder uses cross-attention only,
-while the joint decoder implements an efficient self-attention, which yields more precise structures.
-
-
 ![NOVA3R Decoder Architectures](assets/nova3r_decoders.png)
+
+The independent decoder uses cross-attention only; the joint decoder uses an efficient self-attention that yields more precise structures.
 
 ---
 
@@ -255,77 +256,98 @@ while the joint decoder implements an efficient self-attention, which yields mor
 
 ### Requirements
 
-| Component | Version |
-|-----------|---------|
-| Python | 3.10+ |
-| PyTorch | 2.2+ |
-| GPU (recommended) | NVIDIA with CUDA 12.1+, ≥24 GB VRAM (48 GB for the largest checkpoints) |
-| Apple Silicon | Supported via MPS for inference (≥32 GB unified memory recommended) |
-| CPU-only | Supported; significantly slower than GPU inference |
+| Component         | Version / Notes                                                            |
+|-------------------|----------------------------------------------------------------------------|
+| Python            | 3.10+                                                                       |
+| PyTorch           | 2.2+ — install for your platform first (see below)                          |
+| CUDA (recommended)| 12.1+, NVIDIA GPU ≥24 GB VRAM (48 GB for largest checkpoints)               |
+| Apple Silicon     | macOS 13.3+, inference via MPS (≥32 GB unified memory recommended)          |
+| CPU               | Supported; significantly slower                                             |
 
-### Install from source
+### Install PyTorch first
 
-Create and activate a virtual environment. On Windows, replace the `source` line with `.venv\Scripts\activate`.
-
-```bash
-python -m venv .venv
-source .venv/bin/activate
-```
-
-Install PyTorch for your platform — see the [PyTorch install picker](https://pytorch.org/get-started/locally/).
-
-CPU / macOS-MPS:
+The package depends on `torch>=2.2` but does **not** pin a wheel index — install PyTorch yourself for your platform ([picker](https://pytorch.org/get-started/locally/)):
 
 ```bash
+# CPU / macOS-MPS
 pip install torch torchvision
-```
 
-CUDA 12.1:
-
-```bash
+# CUDA 12.1
 pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
 ```
 
-Install the package in editable mode:
+### Install nova3r
+
+Pick **one** of the two flows below.
+
+#### A. From source (development)
 
 ```bash
+git clone https://github.com/egecimsir/nova3r-a3s.git
+cd nova3r-a3s
+python -m venv .venv && source .venv/bin/activate     # Windows: .venv\Scripts\activate
+pip install torch torchvision                          # or the CUDA command above
 pip install -e .
 ```
 
-Optional extras — `[io]` installs `open3d` for PLY export; `[sampling]` installs `pytorch3d` for FPS / k-NN sampling:
+#### B. From Git URL (consumer)
+
+```bash
+python -m venv .venv && source .venv/bin/activate
+pip install torch torchvision                          # or the CUDA command above
+pip install "nova3r @ git+https://github.com/egecimsir/nova3r-a3s.git"
+# Pin to a tag/commit for reproducibility:
+# pip install "nova3r @ git+https://github.com/egecimsir/nova3r-a3s.git@v0.1.0"
+```
+
+Both flows register the `nova3r-download` CLI on your `PATH`.
+
+#### C. Automated (script)
+
+After cloning, [`scripts/setup.sh`](scripts/setup.sh) handles venv creation, PyTorch install, the CUDA-only `torch-cluster` wheel, and the editable install in one step. It auto-detects the host (Linux+nvcc → CUDA, macOS → MPS, else CPU) and auto-appends the `[cuda]` extra on CUDA hosts.
+
+```bash
+git clone https://github.com/egecimsir/nova3r-a3s.git
+cd nova3r-a3s
+bash scripts/setup.sh
+source .venv/bin/activate
+```
+
+Env var overrides:
+
+| Variable | Default | Effect |
+|---|---|---|
+| `PYTHON_BIN` | `python3.10` | Interpreter for a fresh venv |
+| `VENV_DIR` | `.venv` | Venv path |
+| `SKIP_TORCH` | `0` | Reuse the torch already in the env |
+| `USE_UV` | `1` | Use `uv pip` if available; set `0` to force plain pip |
+| `EXTRAS` | `io` | Comma-separated extras (`[cuda]` auto-appended on CUDA) |
+| `TORCH_VERSION` / `TORCHVISION_VERSION` | `2.5.1` / `0.20.1` | Torch wheel versions |
+| `CUDA_TAG` | `cu121` | Torch + PyG wheel index tag (CUDA hosts) |
+
+Reuses an active venv if `VIRTUAL_ENV` is set, which makes it safe to delegate to from a parent setup script.
+
+### Optional extras
+
+| Extra        | Installs        | Required for                                                 |
+|--------------|-----------------|--------------------------------------------------------------|
+| `[io]`       | `open3d`        | `save_pointcloud_ply` / `predict(output_path=...)` (PLY export). |
+| `[sampling]` | `pytorch3d`     | FPS / k-NN sampling in `nova3r.utils.sampling`. No universal PyPI wheel — see [pytorch3d install guide](https://github.com/facebookresearch/pytorch3d/blob/main/INSTALL.md). |
+| `[cuda]`     | `torch-cluster` | Required at runtime by `Nova3rImgCond`, `Nova3rPtsCond`, and the TripoSG AE. CUDA-only; install the matching wheel from the PyG index (see below). |
+| `[all]`      | all of the above | Convenience.                                                |
 
 ```bash
 pip install -e ".[io]"
-pip install -e ".[sampling]"
+pip install -e ".[cuda]"
 ```
 
-### Install as a package
-
-To use `nova3r` without cloning the repository, install it directly from Git. Create and activate a virtual environment first (see commands above), then install PyTorch for your platform, followed by:
+**`torch-cluster` install (CUDA hosts only):** the package only ships as a torch-ABI-matched wheel, so install it via the PyG index after PyTorch:
 
 ```bash
-pip install "nova3r @ git+https://github.com/<you>/nova3r-a3s.git"
+pip install torch-cluster -f https://data.pyg.org/whl/torch-2.4.0+cu121.html
 ```
 
-Pin to a tag or commit for reproducibility:
-
-```bash
-pip install "nova3r @ git+https://github.com/<you>/nova3r-a3s.git@v0.1.0"
-```
-
-Installing the package also registers the `nova3r-download` command on your `PATH` (see [Checkpoints](#checkpoints)).
-
-### Platform notes
-
-- **`torch-cluster`** is a required dependency that ships only as a source/wheel build matching your PyTorch + CUDA version. If `pip install -e .` fails on it, install the matching wheel from the [PyG wheel index](https://data.pyg.org/whl/) first:
-
-  ```bash
-  pip install torch-cluster -f https://data.pyg.org/whl/torch-2.4.0+cu121.html
-  ```
-
-- **`pytorch3d`** has no universal PyPI wheel and is only required for the FPS / k-NN sampling paths in `nova3r.utils.sampling`. See the [pytorch3d install guide](https://github.com/facebookresearch/pytorch3d/blob/main/INSTALL.md).
-- **Apple Silicon (MPS)**: inference works out of the box with `device="mps"`. Avoid CUDA-only wheels. Note that `torch-cluster` does not support MPS — tensors passing through sampling code must remain on CPU.
-- **`open3d`** is required only for `save_pointcloud_ply` / `predict(output_path=...)` and is several hundred megabytes. Omit the `[io]` extra if you handle PLY serialization separately (e.g. with `plyfile`).
+> **macOS / CPU:** `torch-cluster` has no MPS/CPU wheel. The package installs and most code paths work; only model classes that import `torch_cluster.fps` at module top (the two `Nova3r*Cond` models, the TripoSG AE) will fail to import. Use the package's lower-level building blocks, or run on a CUDA host for end-to-end inference.
 
 ### Verify
 
@@ -333,210 +355,105 @@ Installing the package also registers the `nova3r-download` command on your `PAT
 python -c "import nova3r; print(nova3r.get_default_device())"
 ```
 
+(Flow C runs this automatically at the end; on non-CUDA hosts it imports only `nova3r.io` + `nova3r.utils.device` to avoid the top-level `torch_cluster` import in the model classes.)
+
+---
+
 ## Checkpoints
 
-Checkpoints are hosted on HuggingFace and must be downloaded separately. They are stored in a directory you specify and are never placed inside the installed package.
+Hosted on HuggingFace; downloaded separately into a directory of your choice (default `./checkpoints`). Each model is stored at `<dest>/<model>/checkpoint-last.pth` with a `.hydra/config.yaml` sidecar required by `load_model`.
 
-| Model | Input | Subdirectory |
-|---|---|---|
-| `Nova3rPtsCond` (AE) | point cloud | `<dest>/scene_ae/` |
-| `Nova3rImgCond` (N=1) | 1 image | `<dest>/scene_n1/` |
-| `Nova3rImgCond` (N=2) | 2 images | `<dest>/scene_n2/` |
-
-Each model is stored at `<dest>/<model>/checkpoint-last.pth` along with a `.hydra/config.yaml` sidecar file required by `load_model`. `<dest>` defaults to `./checkpoints`.
-
-If the repository is gated or `HF_TOKEN` is not configured, authenticate first:
+| Model                 | Input        | Subdirectory       |
+|-----------------------|--------------|--------------------|
+| `Nova3rPtsCond` (AE)  | point cloud  | `<dest>/scene_ae/` |
+| `Nova3rImgCond` (N=1) | 1 image      | `<dest>/scene_n1/` |
+| `Nova3rImgCond` (N=2) | 2 images     | `<dest>/scene_n2/` |
 
 ```bash
-huggingface-cli login
+huggingface-cli login                                   # if HF_TOKEN not set
+nova3r-download                                          # all models → ./checkpoints
+nova3r-download --model scene_n1 --dest ./assets/ckpts   # one model, custom path
+nova3r-download --force                                  # re-download existing files
 ```
 
-Download all models to the default path:
+Programmatic equivalent: `nova3r.download_checkpoints(model="scene_n1", dest="./assets/ckpts")`.
 
-```bash
-nova3r-download
-```
+---
 
-Download a specific model to a custom path:
-
-```bash
-nova3r-download --model scene_n1 --dest ./assets/ckpts
-```
-
-Force re-download of existing files:
-
-```bash
-nova3r-download --force
-```
-
-The same functionality is available programmatically:
-
-```python
-import nova3r
-nova3r.download_checkpoints(model="scene_n1", dest="./assets/ckpts")
-```
-
-## Usage
-
-### Quick start
-
-`nova3r.predict` is the high-level entry point. It accepts one or two images and returns an `(N, 3)` NumPy point cloud, automatically selecting the best available device (CUDA > MPS > CPU).
+## Quick start
 
 ```python
 import nova3r
 
 pts = nova3r.predict(
     ckpt_path="./checkpoints/scene_n1/checkpoint-last.pth",
-    image_paths=["./input.png"],
-    resolution=(518, 392),
+    image_paths=["./input.png"],          # 1 or 2 images
+    resolution=(518, 392),                # must be multiples of 14
     num_queries=20000,
-    output_path="./output.ply",
+    output_path="./output.ply",           # optional; requires [io] extra
 )
-print(pts.shape)
+print(pts.shape)                          # (20000, 3)
 ```
 
-Supply one image for single-view or two for multi-view reconstruction. The released checkpoints expect `(width, height) = (518, 392)`. `output_path` is optional and requires the `[io]` extra.
+Released checkpoints expect `(width, height) = (518, 392)`. `device` is auto-selected (CUDA > MPS > CPU); override with `device="cpu" | "mps" | "cuda:1" | torch.device(...)`.
 
-All entry points accept a `device` argument: `None` (auto-select), a string, a `torch.device`, or a tensor. The device preference order is CUDA > MPS > CPU.
+For a fine-grained pipeline (preprocessing, batching, model reuse), use `load_model` + `load_images` + `make_pairs` + `inference_nova3r` + `save_pointcloud_ply` directly — see [`nova3r/io.py`](nova3r/io.py) for the full reference path.
 
-```python
-import torch
-import nova3r
+---
 
-nova3r.predict(..., device=None)
-nova3r.predict(..., device="cpu")
-nova3r.predict(..., device="mps")
-nova3r.predict(..., device=torch.device("cuda:1"))
-```
-
-To resolve or inspect the active device explicitly:
+## Public API
 
 ```python
-from nova3r.utils.device import get_default_device, resolve_device
-
-device = get_default_device()
-device = resolve_device("cuda:0")
-device = resolve_device(some_tensor)
-```
-
-### Inference API
-
-For fine-grained control over preprocessing, batching, or model reuse across multiple calls:
-
-```python
-from nova3r import load_model, load_images, make_pairs, inference_nova3r, save_pointcloud_ply
-from nova3r.utils.device import get_default_device
-
-device = get_default_device()
-
-model, cfg = load_model("./checkpoints/scene_n1/checkpoint-last.pth", device=device)
-model.eval()
-
-images = load_images(["./a.png", "./b.png"], size=518)
-pairs = make_pairs(images, scene_graph="complete", prefilter=None, symmetrize=False)
-
-out = inference_nova3r(
-    cfg, pairs, model, device=device,
-    batch_size=1, num_queries=20000,
-    method=cfg.get("fm_sampling", "euler"),
-)
-pts3d = out["pred"]["pts3d_xyz"][0].cpu().numpy()
-
-save_pointcloud_ply(pts3d, "./output.ply")
-```
-
-### Manual model construction
-
-To instantiate a model without `load_model` — for example in tests or when overriding configuration — use the model class directly with parameters from `cfg.model.params`:
-
-```python
-import torch
-from omegaconf import OmegaConf
-from nova3r import Nova3rImgCond, get_default_device
-
-device = get_default_device()
-cfg = OmegaConf.load("./checkpoints/scene_n1/.hydra/config.yaml").experiment
-
-model = Nova3rImgCond(**cfg.model.params).to(device)
-
-state = torch.load("./checkpoints/scene_n1/checkpoint-last.pth", map_location=device)
-model.load_state_dict(state["model"], strict=True)
-model.eval()
-```
-
-### Training
-
-This package provides **model definitions only** — no training loop, optimizer, or dataloader. The snippet below assumes a flat-dict batch (`{str: Tensor}`); replace the `.to(device)` comprehension with a recursive helper for nested batch structures.
-
-```python
-import torch
-from torch.utils.data import DataLoader
-from nova3r import Nova3rImgCond
-from nova3r.utils.device import get_default_device, autocast
-
-device = get_default_device()
-model = Nova3rImgCond(**your_model_params).to(device)
-model.train()
-
-opt = torch.optim.AdamW(model.parameters(), lr=1e-4, weight_decay=0.05)
-loader = DataLoader(YourDataset(...), batch_size=8, shuffle=True, num_workers=4)
-
-for batch in loader:
-    batch = {k: v.to(device) for k, v in batch.items()}
-    with autocast(device, dtype=torch.bfloat16):
-        pred = model(batch)
-        loss = your_loss_fn(pred, batch)
-
-    opt.zero_grad(set_to_none=True)
-    loss.backward()
-    opt.step()
-```
-
-`model.forward(...)` returns raw predictions. Define your own loss function — for example, a Chamfer distance combined with a flow-matching velocity loss, as described in the paper.
-
-### Public API
-
-```python
+# Models
 nova3r.Nova3rImgCond
 nova3r.Nova3rPtsCond
 nova3r.BatchModelWrapper
-nova3r.inference_nova3r(cfg, pairs, model, device, batch_size=1, num_queries=20000, method="euler")
+
+# Pipeline
 nova3r.load_model(ckpt_path, device=None)
-nova3r.predict(ckpt_path, image_paths, device=None, resolution=(518, 392), num_queries=20000, output_path=None)
 nova3r.load_images(paths, size=...)
 nova3r.make_pairs(images, scene_graph="complete", prefilter=None, symmetrize=False)
+nova3r.inference_nova3r(cfg, pairs, model, device, batch_size=1, num_queries=20000, method="euler")
+nova3r.predict(ckpt_path, image_paths, device=None, resolution=(518, 392), num_queries=20000, output_path=None)
 nova3r.save_pointcloud_ply(pts, path)
+
+# Checkpoints + device
 nova3r.download_checkpoints(model="all", dest="./checkpoints", repo="wrchen530/nova3r", force=False)
 nova3r.get_default_device()
 nova3r.resolve_device(device)
 nova3r.autocast(device, dtype=None, enabled=True)
 ```
 
-### Troubleshooting
-
-- **`ModuleNotFoundError: torch_cluster`** — install the matching wheel from <https://data.pyg.org/whl/>.
-- **`ImportError: save_pointcloud_ply requires open3d`** — install the `[io]` extra (`pip install -e ".[io]"`) or pass `output_path=None` and handle PLY serialization separately.
-- **`FileNotFoundError: No .hydra/config.yaml found`** — the checkpoint directory is missing the Hydra configuration sidecar. Re-download with `nova3r-download --force`, or construct the model manually (see [Manual model construction](#manual-model-construction)).
-- **`KeyError: Unknown model class 'X'`** — the checkpoint's `cfg.model.name` is not registered in `nova3r.io._MODEL_REGISTRY`. Only `Nova3rImgCond` and `Nova3rPtsCond` are registered by default; extend the registry for custom subclasses.
-- **HuggingFace 401 / gated repository** — run `huggingface-cli login` or set the `HF_TOKEN` environment variable before invoking `nova3r-download`.
-- **bf16 autocast errors on MPS** — `nova3r.utils.device.autocast` suppresses this automatically. When calling `torch.amp.autocast` directly, use `dtype=torch.float16` or disable autocast on MPS entirely.
+---
 
 ## Package layout
 
-```
-nova3r/
-  inference.py          # inference_nova3r + flow-matching glue
-  io.py                 # load_images, make_pairs, save_pointcloud_ply, load_model, predict
-  models/               # Nova3rImgCond, Nova3rPtsCond, BatchModelWrapper, aggregator
-  heads/                # DPT head, pts3d encoder/decoder, TripoSG AE wrapper
-  layers/               # transformer blocks, attention, RoPE, etc.
-  flow_matching/        # paths, schedulers, ODE solver
-  utils/                # device, geometry, misc, image, image_pairs, sampling
-  scripts/              # download_checkpoints (nova3r-download CLI entry point)
-  _vendor/
-    croco/models/blocks.py
-    triposg/            # vendored TripoSG package
-```
+| Path                    | What lives here                                                                 |
+|-------------------------|---------------------------------------------------------------------------------|
+| `nova3r/io.py`          | User-facing I/O: `load_images`, `make_pairs`, `save_pointcloud_ply`, `load_model`, `predict`. |
+| `nova3r/inference.py`   | `inference_nova3r` — flow-matching ODE rollout + glue to model forward.         |
+| `nova3r/models/`        | `Nova3rImgCond`, `Nova3rPtsCond`, `BatchModelWrapper`, view aggregator.         |
+| `nova3r/heads/`         | DPT head, pts3d encoder/decoder, TripoSG AE wrapper.                            |
+| `nova3r/layers/`        | Transformer blocks: attention, MLP, RoPE, patch embed, ViT.                     |
+| `nova3r/flow_matching/` | Probability paths, schedulers, ODE solver.                                       |
+| `nova3r/utils/`         | `device`, `geometry`, `image`, `image_pairs`, `sampling`, `misc`.               |
+| `nova3r/scripts/`       | `download_checkpoints` — backs the `nova3r-download` CLI.                       |
+| `nova3r/_vendor/`       | Vendored deps: CroCo blocks (CC BY-NC-SA 4.0), TripoSG (MIT).                   |
+
+---
+
+## Troubleshooting
+
+| Symptom                                                | Fix                                                                                                                  |
+|--------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------|
+| `ModuleNotFoundError: torch_cluster` (at `import nova3r`) | Install the matching wheel: `pip install torch-cluster -f https://data.pyg.org/whl/torch-<ver>+<cuda>.html`. CUDA host required. |
+| `ImportError: save_pointcloud_ply requires open3d`     | `pip install -e ".[io]"`, or pass `output_path=None` and serialize PLY yourself.                                     |
+| `FileNotFoundError: No .hydra/config.yaml found`       | Checkpoint dir missing the Hydra sidecar — re-run `nova3r-download --force`.                                         |
+| `KeyError: Unknown model class 'X'`                    | Only `Nova3rImgCond` / `Nova3rPtsCond` are registered in `nova3r.io._MODEL_REGISTRY`; extend it for custom subclasses. |
+| HuggingFace 401 / gated repo                           | `huggingface-cli login`, or set `HF_TOKEN`.                                                                          |
+| bf16 autocast errors on MPS                            | Use `nova3r.utils.device.autocast` (suppresses bf16 on MPS) instead of calling `torch.amp.autocast` directly.        |
+
+---
 
 ## Citation
 
@@ -551,7 +468,8 @@ nova3r/
 
 ## License
 
-NOVA3R is released under the Apache 2.0 license (see `LICENSE`). Vendored third-party components retain their original licenses (see `NOTICES`):
+Apache 2.0 (see `LICENSE`). Vendored components retain their original licenses (see `NOTICES`):
+
 - CroCo (`nova3r/_vendor/croco/`) — CC BY-NC-SA 4.0
 - TripoSG (`nova3r/_vendor/triposg/`) — MIT
 - DUSt3R-derived utilities (`nova3r/utils/`) — CC BY-NC-SA 4.0

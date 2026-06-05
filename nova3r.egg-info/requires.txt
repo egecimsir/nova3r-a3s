@@ -11,10 +11,21 @@ diffusers
 flow-matching
 torchdiffeq
 huggingface-hub>=0.22
+
+[all]
+nova3r[cuda,io,render,sampling]
+
+[cuda]
 torch-cluster
 
 [io]
 open3d
+
+[render]
+pytorch3d
+open3d
+imageio
+matplotlib
 
 [sampling]
 pytorch3d

@@ -1,2 +1,3 @@
 [console_scripts]
 nova3r-download = nova3r.scripts.download_checkpoints:main
+nova3r-render = nova3r.scripts.render:main
